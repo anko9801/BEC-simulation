@@ -39,11 +39,11 @@ end
 
 function _half_potential_step!(ws::Workspace{N}, dt_half, n_comp, ndim, imaginary_time) where {N}
     zee = zeeman_at(ws.zeeman, ws.state.t)
-    zeeman_diag = collect(zeeman_diagonal(zee, ws.spin_matrices.system))
+    zeeman_diag = zeeman_diagonal(zee, ws.spin_matrices.system)
 
     apply_diagonal_potential_step!(
         ws.state.psi, ws.potential_values, zeeman_diag,
-        ws.interactions.c0, dt_half / 2, n_comp, ndim;
+        ws.interactions.c0, dt_half / 2, n_comp, ndim, ws.density_buf;
         imaginary_time,
     )
 
@@ -71,7 +71,7 @@ function _half_potential_step!(ws::Workspace{N}, dt_half, n_comp, ndim, imaginar
 
     apply_diagonal_potential_step!(
         ws.state.psi, ws.potential_values, zeeman_diag,
-        ws.interactions.c0, dt_half / 2, n_comp, ndim;
+        ws.interactions.c0, dt_half / 2, n_comp, ndim, ws.density_buf;
         imaginary_time,
     )
 end
