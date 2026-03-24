@@ -56,7 +56,8 @@ using SpinorBEC
         V = 0.5 .* x .^ 2
         zeeman = [0.0, 0.0, 0.0]
 
-        apply_diagonal_potential_step!(psi, V, zeeman, 0.0, 0.1, 3, 1)
+        density_buf = zeros(Float64, 128)
+        apply_diagonal_potential_step!(psi, V, zeeman, 0.0, 0.1, 3, 1, density_buf)
         norm_after = sqrt(sum(abs2, psi) * dx)
         @test norm_after ≈ 1.0 atol = 1e-12
     end
