@@ -27,6 +27,7 @@ struct PhaseConfig
     zeeman_p::RampOrConstant
     zeeman_q::RampOrConstant
     potential::Union{Nothing,PotentialConfig}
+    noise_amplitude::Float64
 end
 
 struct GroundStateConfig
@@ -157,8 +158,9 @@ function _parse_phase(d::Dict)
     zeeman_q = _parse_ramp_or_constant(get(z, "q", 0.0))
 
     pot = haskey(d, "potential") ? _parse_potential_config(d["potential"]) : nothing
+    noise_amplitude = Float64(get(d, "noise_amplitude", 0.0))
 
-    PhaseConfig(name, duration, dt, save_every, zeeman_p, zeeman_q, pot)
+    PhaseConfig(name, duration, dt, save_every, zeeman_p, zeeman_q, pot, noise_amplitude)
 end
 
 function _parse_ramp_or_constant(v)::RampOrConstant
