@@ -81,7 +81,7 @@ function run_experiment(config::ExperimentConfig; verbose::Bool=true)
             n_steps=gs.n_steps,
             tol=gs.tol,
             initial_state=gs.initial_state,
-            enable_ddi,
+            enable_ddi=gs.enable_ddi,
             c_dd=c_dd_val,
         )
 
@@ -118,11 +118,12 @@ function run_experiment(config::ExperimentConfig; verbose::Bool=true)
             psi_init=psi_current,
             enable_ddi,
             c_dd=c_dd_val,
+            loss=sys_cfg.loss,
         )
         ws.state.t = t_offset
 
-        if phase.noise_amplitude > 0
-            _apply_noise!(ws.state.psi, phase.noise_amplitude, ndim, grid)
+        if phase.noise_amplitude !== nothing && phase.noise_amplitude > 0
+            _add_noise!(ws.state.psi, phase.noise_amplitude, 2 * atom.F + 1, ndim, grid)
         end
 
         result = run_simulation!(ws)
@@ -139,13 +140,13 @@ function run_experiment(config::ExperimentConfig; verbose::Bool=true)
     ExperimentResult(config, gs_energy, gs_converged, phase_results, phase_names)
 end
 
-function _apply_noise!(psi, amplitude, ndim, grid)
+function _add_noise!(psi, amplitude, n_components, ndim, grid)
     n_pts = ntuple(d -> size(psi, d), ndim)
-    n_comp = size(psi, ndim + 1)
-    for c in 1:n_comp
+    for c in 1:n_components
         idx = _component_slice(ndim, n_pts, c)
-        view(psi, idx...) .+= amplitude .* randn(ComplexF64, n_pts...)
+        view(psi, idx...) .+= amplitude .* randn(ComplexF64, n_pts)
     end
     dV = cell_volume(grid)
-    psi ./= sqrt(sum(abs2, psi) * dV)
+    norm = sqrt(sum(abs2, psi) * dV)
+    psi ./= norm
 end

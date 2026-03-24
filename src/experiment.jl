@@ -27,7 +27,7 @@ struct PhaseConfig
     zeeman_p::RampOrConstant
     zeeman_q::RampOrConstant
     potential::Union{Nothing,PotentialConfig}
-    noise_amplitude::Float64
+    noise_amplitude::Union{Nothing,Float64}
 end
 
 struct GroundStateConfig
@@ -37,6 +37,7 @@ struct GroundStateConfig
     initial_state::Symbol
     zeeman::ZeemanParams
     potential::PotentialConfig
+    enable_ddi::Bool
 end
 
 struct DDIConfig
@@ -52,6 +53,7 @@ struct SystemConfig
     grid_box_size::Vector{Float64}
     interactions::InteractionParams
     ddi::DDIConfig
+    loss::Union{Nothing,LossParams}
 end
 
 struct ExperimentConfig
@@ -130,7 +132,14 @@ function _parse_system(d::Dict)
         DDIConfig()
     end
 
-    SystemConfig(atom_name, n_points, box_size, interactions, ddi)
+    loss = if haskey(d, "losses")
+        ld = d["losses"]
+        LossParams(Float64(get(ld, "gamma_dr", 0.0)), Float64(get(ld, "L3", 0.0)))
+    else
+        nothing
+    end
+
+    SystemConfig(atom_name, n_points, box_size, interactions, ddi, loss)
 end
 
 function _parse_ground_state(d::Dict)
@@ -144,7 +153,9 @@ function _parse_ground_state(d::Dict)
 
     pot = _parse_potential_config(get(d, "potential", Dict("type" => "none")))
 
-    GroundStateConfig(dt, n_steps, tol, initial_state, zeeman, pot)
+    gs_enable_ddi = Bool(get(d, "enable_ddi", false))
+
+    GroundStateConfig(dt, n_steps, tol, initial_state, zeeman, pot, gs_enable_ddi)
 end
 
 function _parse_phase(d::Dict)
@@ -158,9 +169,12 @@ function _parse_phase(d::Dict)
     zeeman_q = _parse_ramp_or_constant(get(z, "q", 0.0))
 
     pot = haskey(d, "potential") ? _parse_potential_config(d["potential"]) : nothing
-    noise_amplitude = Float64(get(d, "noise_amplitude", 0.0))
 
-    PhaseConfig(name, duration, dt, save_every, zeeman_p, zeeman_q, pot, noise_amplitude)
+    noise_amp = let v = get(d, "noise_amplitude", nothing)
+        v === nothing ? nothing : Float64(v)
+    end
+
+    PhaseConfig(name, duration, dt, save_every, zeeman_p, zeeman_q, pot, noise_amp)
 end
 
 function _parse_ramp_or_constant(v)::RampOrConstant
