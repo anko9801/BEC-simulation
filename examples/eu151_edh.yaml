@@ -1,0 +1,95 @@
+# ================================================================
+# Eu151 Einstein-de Haas effect
+# ================================================================
+#
+# Reference:
+#   "Probing spontaneously formed spin textures in a europium
+#    spinor dipolar gas via tilted-axis spin separation"
+#   Matsui et al., Institute of Science Tokyo
+#
+# Physics:
+#   Spin-polarized F=6 BEC (m=+6) at zero magnetic field undergoes
+#   spin relaxation driven by DDI. Conservation of J_z = L_z + S_z
+#   transfers spin angular momentum to orbital (mass circulation).
+#
+# Units: dimensionless (hbar = m = omega_perp = 1)
+#   length  = a_ho = sqrt(hbar / (m * omega_perp))
+#   energy  = hbar * omega_perp
+#   time    = 1 / omega_perp
+#
+# === Unknown parameters (need experimental values) ===
+#   omega_perp : trap frequency, assumed 2pi x 100 Hz
+#   N_atoms    : atom number, assumed 15000
+#   g_F        : Lande factor, = 7/6 from mu = 7 mu_B, F = 6
+#
+# === Conversion formulae ===
+#   p = g_F * mu_B * B / (hbar * omega_perp)
+#   t_dimless = t_SI * omega_perp
+#   c0 = 4pi * (a_s / a_ho) * N  /  (sqrt(2pi) * a_z / a_ho)
+#   c_dd = C_dd * N / (hbar * omega * a_ho^3)  /  (sqrt(2pi) * a_z/a_ho)
+#
+# === Reference values (omega_perp = 2pi x 100 Hz) ===
+#   a_ho  = 0.82 um
+#   a_z   = 1.16 um  (lambda_z = 0.5)
+#   1 ms  = 0.63 omega^{-1}
+#   1 mG  -> p ~ 16300  (but diagonal Zeeman is exact in split-step)
+#   c_dd  ~ 49
+#   c0    ~ 378
+# ================================================================
+
+experiment:
+  name: "Eu151 Einstein-de Haas (2D)"
+
+  system:
+    atom: Eu151
+    grid:
+      n_points: [64, 64]
+      box_size: [20.0, 20.0]
+    interactions:
+      c0: 378.0
+      c1: 0.0
+    ddi:
+      enabled: true
+      c_dd: 49.0
+
+  # Fully polarized ground state (m = +F)
+  # Large p ensures all population stays in m = +6.
+  # The exact p value does not matter as long as p >> c_dd.
+  ground_state:
+    dt: 0.005
+    n_steps: 20000
+    tol: 1.0e-10
+    initial_state: ferromagnetic
+    zeeman:
+      p: 5000.0
+      q: 0.0
+    potential:
+      type: harmonic
+      omega: [1.0, 1.0]
+
+  sequence:
+    # ---- Phase 1: Fast quench to near-zero field ----
+    # Poster: "interruption" in 0.2 ms = 0.126 omega^{-1}
+    # Ramp p from 5000 to ~1 (residual field ~ 0.06 uG)
+    - name: quench
+      duration: 0.126
+      dt: 0.001
+      save_every: 10
+      zeeman:
+        p:
+          from: 5000.0
+          to: 1.0
+        q: 0.0
+
+    # ---- Phase 2: Spin relaxation at zero field ----
+    # Poster observes at t = 0 ms and t = 5 ms.
+    # 5 ms = 3.14 omega^{-1}
+    # DDI drives spin relaxation: m=+6 population transfers to
+    # m=+5, +4, +3, ... with compensating orbital angular momentum.
+    - name: spin_relaxation
+      duration: 3.14
+      dt: 0.001
+      save_every: 20
+      zeeman:
+        p: 1.0
+        q: 0.0
