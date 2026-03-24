@@ -90,6 +90,7 @@ export split_step!, prepare_kinetic_phase
 # Observables
 export total_density, component_density, magnetization
 export spin_density_vector, total_norm, total_energy
+export probability_current, orbital_angular_momentum
 
 # Simulation
 export find_ground_state, run_simulation!, make_workspace, init_psi

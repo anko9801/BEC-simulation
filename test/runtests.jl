@@ -22,4 +22,5 @@ using SpinorBEC
     include("test_raman.jl")
     include("test_adaptive_dt.jl")
     include("test_unitful.jl")
+    include("test_angular_momentum.jl")
 end
