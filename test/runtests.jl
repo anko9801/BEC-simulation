@@ -12,4 +12,8 @@ using SpinorBEC
     include("test_3d.jl")
     include("test_ddi.jl")
     include("test_experiment.jl")
+    include("test_physics_level0.jl")
+    include("test_physics_level1.jl")
+    include("test_physics_level2.jl")
+    include("test_physics_level3.jl")
 end
