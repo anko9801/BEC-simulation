@@ -290,7 +290,7 @@
         """
         config = load_experiment_from_string(yaml_with_noise)
         @test config.sequence[1].noise_amplitude == 0.05
-        @test config.sequence[2].noise_amplitude == 0.0
+        @test config.sequence[2].noise_amplitude === nothing
     end
 
     @testset "run_experiment integration" begin
