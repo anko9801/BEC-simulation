@@ -5,6 +5,7 @@ using StaticArrays
 using FFTW
 using JLD2
 using YAML
+using Unitful
 
 include("types.jl")
 include("units.jl")
@@ -29,6 +30,7 @@ include("simulation.jl")
 include("io.jl")
 include("experiment.jl")
 include("experiment_runner.jl")
+include("unitful_support.jl")
 
 # Types
 export GridConfig, Grid, SpinSystem, SpinMatrices

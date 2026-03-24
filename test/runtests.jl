@@ -21,4 +21,5 @@ using SpinorBEC
     include("test_laser_potential.jl")
     include("test_raman.jl")
     include("test_adaptive_dt.jl")
+    include("test_unitful.jl")
 end
