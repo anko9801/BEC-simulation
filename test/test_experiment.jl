@@ -258,6 +258,41 @@
         @test components[2].type == :gravity
     end
 
+    @testset "YAML parsing - noise_amplitude" begin
+        yaml_with_noise = """
+        experiment:
+          name: "noise test"
+          system:
+            atom: Rb87
+            grid:
+              n_points: [32]
+              box_size: [10.0]
+            interactions:
+              c0: 1.0
+              c1: 0.0
+          sequence:
+            - name: noisy
+              duration: 1.0
+              dt: 0.01
+              noise_amplitude: 0.05
+              zeeman:
+                p: 0.0
+                q: 0.0
+              potential:
+                type: harmonic
+                omega: [1.0]
+            - name: quiet
+              duration: 1.0
+              dt: 0.01
+              zeeman:
+                p: 0.0
+                q: 0.0
+        """
+        config = load_experiment_from_string(yaml_with_noise)
+        @test config.sequence[1].noise_amplitude == 0.05
+        @test config.sequence[2].noise_amplitude == 0.0
+    end
+
     @testset "run_experiment integration" begin
         yaml_str = """
         experiment:
@@ -308,6 +343,52 @@
         sim = result.phase_results[1]
         @test length(sim.times) > 1
         @test sim.times[1] == 0.0  # t_offset
+        @test all(n -> n > 0, sim.norms)
+    end
+
+    @testset "run_experiment integration - noise_amplitude" begin
+        yaml_str = """
+        experiment:
+          name: "noise integration"
+          system:
+            atom: Rb87
+            grid:
+              n_points: [32]
+              box_size: [20.0]
+            interactions:
+              c0: 10.0
+              c1: -0.5
+          ground_state:
+            dt: 0.005
+            n_steps: 200
+            tol: 1.0e-6
+            initial_state: polar
+            zeeman:
+              p: 0.0
+              q: 0.1
+            potential:
+              type: harmonic
+              omega: [1.0]
+          sequence:
+            - name: noisy_evolve
+              duration: 0.1
+              dt: 0.001
+              save_every: 50
+              noise_amplitude: 0.01
+              zeeman:
+                p: 0.0
+                q: 0.1
+              potential:
+                type: harmonic
+                omega: [1.0]
+        """
+
+        config = load_experiment_from_string(yaml_str)
+        @test config.sequence[1].noise_amplitude == 0.01
+        result = run_experiment(config; verbose=false)
+        @test length(result.phase_results) == 1
+        @test result.phase_names == ["noisy_evolve"]
+        sim = result.phase_results[1]
         @test all(n -> n > 0, sim.norms)
     end
 

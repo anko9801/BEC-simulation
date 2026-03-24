@@ -121,6 +121,10 @@ function run_experiment(config::ExperimentConfig; verbose::Bool=true)
         )
         ws.state.t = t_offset
 
+        if phase.noise_amplitude > 0
+            _apply_noise!(ws.state.psi, phase.noise_amplitude, ndim, grid)
+        end
+
         result = run_simulation!(ws)
 
         psi_current = copy(ws.state.psi)
@@ -133,4 +137,15 @@ function run_experiment(config::ExperimentConfig; verbose::Bool=true)
     end
 
     ExperimentResult(config, gs_energy, gs_converged, phase_results, phase_names)
+end
+
+function _apply_noise!(psi, amplitude, ndim, grid)
+    n_pts = ntuple(d -> size(psi, d), ndim)
+    n_comp = size(psi, ndim + 1)
+    for c in 1:n_comp
+        idx = _component_slice(ndim, n_pts, c)
+        view(psi, idx...) .+= amplitude .* randn(ComplexF64, n_pts...)
+    end
+    dV = cell_volume(grid)
+    psi ./= sqrt(sum(abs2, psi) * dV)
 end

@@ -96,6 +96,14 @@ function apply_ddi_step!(
     _compute_spin_density!(bufs.Fx_r, bufs.Fy_r, bufs.Fz_r, psi, sm, n_comp, ndim, n_pts)
     compute_ddi_potential!(ddi, bufs, plans)
 
+    if any(isnan, bufs.Phi_x) || any(isnan, bufs.Phi_y) || any(isnan, bufs.Phi_z) ||
+       any(isinf, bufs.Phi_x) || any(isinf, bufs.Phi_y) || any(isinf, bufs.Phi_z)
+        throw(ErrorException(
+            "DDI potential contains NaN/Inf. " *
+            "This usually means the wavefunction is unnormalized or dt is too large."
+        ))
+    end
+
     @inbounds for I in CartesianIndices(n_pts)
         phi_x = real(bufs.Phi_x[I])
         phi_y = real(bufs.Phi_y[I])
