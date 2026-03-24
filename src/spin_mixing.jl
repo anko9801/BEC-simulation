@@ -6,6 +6,7 @@ function apply_spin_mixing_step!(
     ndim::Int;
     imaginary_time::Bool=false,
 )
+    abs(c1) < 1e-30 && return nothing
     n_comp = sm.system.n_components
     n_pts = ntuple(d -> size(psi, d), ndim)
 
