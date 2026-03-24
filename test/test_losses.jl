@@ -259,7 +259,6 @@
         sys = SpinSystem(1)
         psi = init_psi(grid, sys; state=:polar)
         dV = cell_volume(grid)
-        N0 = sum(abs2, psi) * dV
 
         psi_before = copy(psi)
         SpinorBEC._add_noise!(psi, 0.01, sys.n_components, 2, grid)
@@ -267,6 +266,49 @@
         @test psi != psi_before
         N1 = sum(abs2, psi) * dV
         @test N1 ≈ 1.0 rtol = 1e-12
+    end
+
+    @testset "_add_noise! skips dominant component" begin
+        config = GridConfig(64, 20.0)
+        grid = make_grid(config)
+        sys = SpinSystem(1)
+        psi = init_psi(grid, sys; state=:ferromagnetic)
+        dominant_before = copy(psi[:, 1])
+
+        SpinorBEC._add_noise!(psi, 0.01, sys.n_components, 1, grid)
+
+        scale = psi[32, 1] / dominant_before[32]
+        @test psi[:, 1] ≈ dominant_before .* scale rtol = 1e-10
+        @test sum(abs2, psi[:, 2]) > 0
+        @test sum(abs2, psi[:, 3]) > 0
+    end
+
+    @testset "GroundStateConfig enable_ddi default" begin
+        yaml = """
+        experiment:
+          name: ddi_gs_test
+          system:
+            atom: Rb87
+            grid:
+              n_points: 64
+              box_size: 20.0
+            interactions:
+              c0: 1.0
+              c1: 0.0
+          ground_state:
+            dt: 0.01
+            n_steps: 100
+            tol: 1.0e-8
+            zeeman:
+              p: 0.0
+              q: 0.0
+            potential:
+              type: harmonic
+              omega: [1.0]
+          sequence: []
+        """
+        cfg = load_experiment_from_string(yaml)
+        @test cfg.ground_state.enable_ddi == false
     end
 
     @testset "2D loss step" begin

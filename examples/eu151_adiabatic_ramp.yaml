@@ -36,7 +36,7 @@ experiment:
     tol: 1.0e-10
     initial_state: ferromagnetic
     zeeman:
-      p: 5000.0
+      p: 100.0
       q: 0.0
     potential:
       type: harmonic

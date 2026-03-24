@@ -142,11 +142,13 @@ end
 
 function _add_noise!(psi, amplitude, n_components, ndim, grid)
     n_pts = ntuple(d -> size(psi, d), ndim)
+    dV = cell_volume(grid)
+    dominant = argmax([sum(abs2, view(psi, _component_slice(ndim, n_pts, c)...)) for c in 1:n_components])
     for c in 1:n_components
+        c == dominant && continue
         idx = _component_slice(ndim, n_pts, c)
         view(psi, idx...) .+= amplitude .* randn(ComplexF64, n_pts)
     end
-    dV = cell_volume(grid)
     norm = sqrt(sum(abs2, psi) * dV)
     psi ./= norm
 end
