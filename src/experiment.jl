@@ -155,8 +155,9 @@ end
 
 function _parse_ramp_or_constant(v)::RampOrConstant
     if v isa Dict
-        ConstantValue(Float64(v["from"]))  # if both present, it's a ramp
-        haskey(v, "to") && return LinearRamp(Float64(v["from"]), Float64(v["to"]))
+        if haskey(v, "to")
+            return LinearRamp(Float64(v["from"]), Float64(v["to"]))
+        end
         return ConstantValue(Float64(v["from"]))
     end
     ConstantValue(Float64(v))
