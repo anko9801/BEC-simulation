@@ -44,12 +44,14 @@ function apply_diagonal_potential_step!(
 
     _total_density!(density_buf, psi, n_components, ndim, n_pts)
 
+    zee_shift = imaginary_time ? minimum(zeeman_diag) : 0.0
+
     for c in 1:n_components
         idx = _component_slice(ndim, n_pts, c)
         psi_view = view(psi, idx...)
 
         if imaginary_time
-            @. psi_view *= exp(-(V_trap + zeeman_diag[c] + c0 * density_buf) * dt_frac)
+            @. psi_view *= exp(-(V_trap + (zeeman_diag[c] - zee_shift) + c0 * density_buf) * dt_frac)
         else
             @. psi_view *= exp(-1im * (V_trap + zeeman_diag[c] + c0 * density_buf) * dt_frac)
         end
