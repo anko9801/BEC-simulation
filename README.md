@@ -1,32 +1,32 @@
 # SpinorBEC.jl
 
-スピンF ボース・アインシュタイン凝縮体（BEC）のシミュレーションパッケージ。分割ステップフーリエ法により、1D/2D/3D のスピノルGross-Pitaevskii方程式を解く。
+A Julia package for simulating spin-$F$ Bose-Einstein condensates by solving the spinor Gross-Pitaevskii equation in 1D/2D/3D via the split-step Fourier method.
 
-## 機能一覧
+## Features
 
-- **任意スピンF**: 角運動量代数からスピン行列を構築（`StaticArrays`でスタック割り当て）
-- **N次元汎用**: 1D / 2D / 3D を `CartesianIndices` による単一コードパスで処理
-- **分割ステップフーリエ法**: Strang分割＋ポテンシャル・スピン混合・DDI・Ramanの入れ子サブステップ
-- **基底状態探索**: 虚時間発展＋収束判定
-- **実時間ダイナミクス**: 多フェーズシーケンス、時間依存ゼーマンランプ、適応時間刻み
-- **ポテンシャル**: 調和トラップ、重力、光双極子トラップ（ガウシアンビーム）、レーザービームポテンシャル、複合
-- **DDI**: 双極子-双極子相互作用（k空間Qテンソル畳み込み）
-- **Raman結合**: 二光子Raman遷移（空間依存、行列指数関数）
-- **ガウシアンビーム光学**: 複素ビームパラメータq、ABCD行列伝搬、モード結合
-- **Thomas-Fermi初期化**: 化学ポテンシャル二分探索による密度プロファイル
-- **トポロジカル観測量**: Berry曲率、超流動渦度、スカーミオン電荷、Majorana星表現
-- **YAML実験設定**: 宣言的な再現可能マルチフェーズシミュレーション
-- **Unitful対応**: 物理単位付き量の直接入力
-- **定義済み原子種**: Rb87（F=1, 強磁性）、Na23（F=1, 反強磁性）、Eu151（F=6, 双極子系）
+- **Arbitrary spin $F$**: spin matrices built from angular momentum algebra (`StaticArrays` for stack allocation)
+- **N-dimensional**: unified code path for 1D / 2D / 3D via `CartesianIndices`
+- **Split-step Fourier**: 2nd-order Strang splitting with nested substeps (potential, spin mixing, DDI, Raman)
+- **Ground state search**: imaginary-time propagation with convergence criterion
+- **Real-time dynamics**: multi-phase sequences, time-dependent Zeeman ramps, leapfrog fusion, adaptive $\Delta t$
+- **Potentials**: harmonic trap, gravity, crossed dipole trap (Gaussian beams), laser beam potential, composites
+- **DDI**: dipolar interaction via $k$-space tensor convolution ($Q_{\alpha\beta}$), optimized to 6 FFTs per step
+- **Raman coupling**: two-photon transitions with spatially dependent matrix exponential
+- **Gaussian beam optics**: complex beam parameter $q$, ABCD matrix propagation, mode coupling
+- **Thomas-Fermi initialization**: chemical potential bisection for density profiles
+- **Topological observables**: Berry curvature, superfluid vorticity, skyrmion charge, Majorana star representation
+- **YAML experiment config**: declarative, reproducible multi-phase simulations
+- **Unitful support**: direct input of physical quantities with units
+- **Built-in atom species**: Rb87 ($F=1$, ferromagnetic), Na23 ($F=1$, antiferromagnetic), Eu151 ($F=6$, dipolar)
 
-## インストール
+## Installation
 
 ```julia
 using Pkg
 Pkg.develop(path="path/to/BEC-simulation")
 ```
 
-## クイックスタート
+## Quick Start
 
 ### Julia API
 
@@ -47,7 +47,7 @@ result = find_ground_state(;
 println("Converged: $(result.converged), E = $(result.energy)")
 ```
 
-### YAML実験設定
+### YAML Experiment Config
 
 ```yaml
 experiment:
@@ -95,95 +95,94 @@ config = load_experiment("experiment.yaml")
 result = run_experiment(config)
 ```
 
-## 物理モデル
+## Physical Model
 
-### ハミルトニアン
+### Hamiltonian
 
-```
-H = Σ_m ∫ ψ_m* [ -ℏ²∇²/(2M) + V(r) - p·m + q·m² + c0·n(r) + c1·⟨F⟩·F + H_ddi + H_Raman ] ψ_m d³r
-```
+The full spinor BEC Hamiltonian is:
 
-| 項 | 説明 | 実装 |
-|---|---|---|
-| 運動エネルギー `-ℏ²∇²/(2M)` | 自由粒子の分散 | FFTでk空間に変換し `k²` を乗算 |
-| 外部ポテンシャル `V(r)` | トラップ等の外場 | 実空間で対角演算 |
-| 線形ゼーマン `-p·m` | 磁場による準位シフト | 成分ごとに定数シフト |
-| 二次ゼーマン `q·m²` | 磁場の二次効果 | 成分ごとに定数シフト |
-| 密度相互作用 `c0·n` | スピン非依存の接触相互作用 | 実空間で `c0·\|ψ\|²` を乗算 |
-| スピン相互作用 `c1·⟨F⟩·F` | スピン依存の接触相互作用 | 各格子点で小行列の指数関数 |
-| DDI | 長距離異方的双極子相互作用 | k空間で `Q_αβ(k) = k̂_αk̂_β - δ_αβ/3` 畳み込み |
-| Raman結合 | 二光子遷移 `(Ω_R/2)(e^{ik·r}F₊ + h.c.) + δF_z` | 空間依存行列指数関数 |
+$$H = \sum_m \int \psi_m^{*} \left[ -\frac{\hbar^2 \nabla^2}{2M} + V(\mathbf{r}) - pm + qm^2 + c_0 n(\mathbf{r}) + c_1 \langle\mathbf{F}\rangle \cdot \mathbf{F} + H_{\mathrm{ddi}} + H_{\mathrm{Raman}} \right] \psi_m \, d^3r$$
 
-### 相互作用パラメータ
+| Term | Description | Implementation |
+|------|-------------|----------------|
+| $-\frac{\hbar^2 \nabla^2}{2M}$ | Free-particle kinetic energy | FFT to $k$-space, multiply by $k^2$ |
+| $V(\mathbf{r})$ | External trapping potential | Diagonal in real space |
+| $-pm$ | Linear Zeeman shift | Constant shift per component |
+| $qm^2$ | Quadratic Zeeman shift | Constant shift per component |
+| $c_0 n$ | Spin-independent contact interaction | Multiply by $c_0 |\psi|^2$ in real space |
+| $c_1 \langle\mathbf{F}\rangle \cdot \mathbf{F}$ | Spin-dependent contact interaction | Matrix exponential at each grid point |
+| $H_{\mathrm{ddi}}$ | Long-range anisotropic dipolar interaction | $k$-space convolution: $Q_{\alpha\beta}(\mathbf{k}) = \hat{k}_\alpha \hat{k}_\beta - \delta_{\alpha\beta}/3$ |
+| $H_{\mathrm{Raman}}$ | Two-photon Raman transition | Spatially dependent matrix exponential: $(\Omega_R/2)(e^{i\mathbf{k}\cdot\mathbf{r}} F_+ + \text{h.c.}) + \delta F_z$ |
 
-スピン1 BECの場合:
+### Interaction Parameters
 
-```
-c0 = 4πℏ²(a0 + 2a2) / (3M)    密度-密度結合
-c1 = 4πℏ²(a2 - a0) / (3M)     スピン-スピン結合
-```
+For spin-1 BECs, the interaction strengths are determined by $s$-wave scattering lengths $a_0$ and $a_2$ (total spin $F_{\mathrm{tot}} = 0, 2$ channels):
 
-- `c1 < 0`: 強磁性（Rb87）
-- `c1 > 0`: 反強磁性（Na23）
+$$c_0 = \frac{4\pi\hbar^2 (a_0 + 2a_2)}{3M}, \qquad c_1 = \frac{4\pi\hbar^2 (a_2 - a_0)}{3M}$$
 
-準低次元系（1D, 2D）では横方向閉じ込めで次元縮約。DDI結合定数: `C_dd = μ₀·μ² / (4π)`
+- $c_1 < 0$: ferromagnetic (${}^{87}$Rb)
+- $c_1 > 0$: antiferromagnetic (${}^{23}$Na)
 
-### 対応原子種
+For quasi-low-dimensional systems (1D, 2D), transverse confinement provides dimensional reduction. The DDI coupling constant is $C_{\mathrm{dd}} = \mu_0 \mu^2 / (4\pi)$.
 
-| 原子 | スピンF | 散乱長 | 磁気モーメント | 特徴 |
-|---|---|---|---|---|
-| ⁸⁷Rb | 1 | a0=101.8 a_B, a2=100.4 a_B | — | 強磁性 (c1 < 0) |
-| ²³Na | 1 | a0=50.0 a_B, a2=55.0 a_B | — | 反強磁性 (c1 > 0) |
-| ¹⁵¹Eu | 6 | a_s=110.0 a_B | 7 μ_B | 双極子系 (ε_dd ≈ 0.55) |
+### Supported Atom Species
 
-任意のスピンFに対してスピン行列を角運動量代数から構築可能。
+| Atom | Spin $F$ | Scattering lengths | Magnetic moment | Character |
+|------|----------|-------------------|-----------------|-----------|
+| ${}^{87}$Rb | 1 | $a_0 = 101.8\,a_B$, $a_2 = 100.4\,a_B$ | — | Ferromagnetic ($c_1 < 0$) |
+| ${}^{23}$Na | 1 | $a_0 = 50.0\,a_B$, $a_2 = 55.0\,a_B$ | — | Antiferromagnetic ($c_1 > 0$) |
+| ${}^{151}$Eu | 6 | $a_s = 110.0\,a_B$ | $7\,\mu_B$ | Dipolar ($\varepsilon_{\mathrm{dd}} \approx 0.55$) |
 
-## 数値手法
+Spin matrices for arbitrary $F$ are constructed from angular momentum algebra.
 
-### Strang分割法（2次精度、対称分割）
+## Numerical Methods
+
+### Strang Splitting (2nd-order Symmetric)
 
 ```
-1. 半ポテンシャルステップ (dt/2):
-   a. 1/4 対角ポテンシャル（トラップ + ゼーマン + c0·密度）
-   b. 1/2 スピン混合（c1 相互作用、行列指数関数）
-   c. [DDI サブステップ（有効時）]
-   d. [Raman サブステップ（有効時）]
-   e. 1/4 対角ポテンシャル（密度再計算）
-2. 全運動エネルギーステップ (dt):
-   FFT → exp(-ik²dt/2) 乗算 → IFFT
-3. 半ポテンシャルステップ (dt/2):
-   ステップ1の鏡像
+1. Half potential step (dt/2):
+   a. 1/4 diagonal potential (trap + Zeeman + c0 * density)
+   b. 1/2 spin mixing (c1 interaction, matrix exponential)
+   c. [DDI substep (if enabled)]
+   d. [Raman substep (if enabled)]
+   e. 1/4 diagonal potential (density recomputed)
+2. Full kinetic step (dt):
+   FFT → multiply by exp(-ik²dt/2) → IFFT
+3. Half potential step (dt/2):
+   mirror of step 1
 ```
 
-スピン混合は `c1 ≈ 0` の場合（例: Eu151）自動スキップ。スピン1ではRodrigues公式、高スピンでは固有値分解による行列指数関数。
+Spin mixing is automatically skipped when $c_1 \approx 0$ (e.g., ${}^{151}$Eu). Uses Rodrigues' formula for spin-1; eigendecomposition via `_exp_i_hermitian` for higher spins.
 
-### 虚時間発展（基底状態探索）
+For real-time dynamics, a leapfrog-fused loop merges adjacent half potential steps $V(\Delta t/2) + V(\Delta t/2) = V(\Delta t)$ between time steps, splitting only at snapshot save points. Kinetic steps use batched FFT over all spinor components.
 
-- `exp(-iHdt)` → `exp(-Hdt)` に置換
-- 各ステップ後に波動関数を再規格化
-- エネルギー変化量が許容誤差以下で収束判定
-- 初期状態: `:polar`（m=0）、`:ferromagnetic`（m=+F）、`:uniform`（均等）
-- Thomas-Fermi初期化: `init_psi_thomas_fermi` で化学ポテンシャルから密度プロファイルを生成
+### Imaginary-Time Propagation (Ground State Search)
 
-### 実時間ダイナミクス
+- Replace $e^{-iH\Delta t} \to e^{-H\Delta t}$ (Wick rotation)
+- Renormalize $\psi$ after each step
+- Convergence when $|\Delta E| < \mathrm{tol}$
+- Initial states: `:polar` ($m=0$), `:ferromagnetic` ($m = +F$), `:uniform` (equal weight)
+- Thomas-Fermi initialization: `init_psi_thomas_fermi` constructs the density profile from the chemical potential
 
-- 多フェーズシーケンス（前フェーズの出力を次フェーズの入力に連鎖）
-- `TimeDependentZeeman` による時間依存ゼーマンパラメータ（線形ランプ）
-- コールバック関数による途中経過の取得
-- 適応時間刻み対応
+### Real-Time Dynamics
 
-## ポテンシャル
+- Multi-phase sequences (output of phase $n$ feeds into phase $n+1$)
+- `TimeDependentZeeman` for linear ramps of $p(t)$, $q(t)$
+- Callback functions for intermediate state access
+- Adaptive time step support
 
-| 種類 | YAML `type` | 数式 | パラメータ |
-|---|---|---|---|
-| なし | `none` | V = 0 | — |
-| 調和トラップ | `harmonic` | V = ½Σ ω_d² x_d² | `omega: [ω_x, ...]` |
-| 重力 | `gravity` | V = g·x[axis] | `g`（デフォルト9.81）, `axis` |
-| 光双極子トラップ | `crossed_dipole` | V = -α·Σ I_beam | `polarizability`, `beams` |
-| レーザービーム | — | ガウシアンビーム強度分布 | `LaserBeamPotential` |
-| 複合 | リスト記法 | V = Σ V_i | 上記の組み合わせ |
+## Potentials
 
-複合ポテンシャルはYAMLのリスト記法で定義:
+| Type | YAML `type` | Formula | Parameters |
+|------|-------------|---------|------------|
+| None | `none` | $V = 0$ | — |
+| Harmonic | `harmonic` | $V = \frac{1}{2}\sum_d \omega_d^2 x_d^2$ | `omega: [ω_x, ...]` |
+| Gravity | `gravity` | $V = g \cdot x_{\mathrm{axis}}$ | `g` (default 9.81), `axis` |
+| Crossed dipole | `crossed_dipole` | $V = -\alpha \sum_i I_{\mathrm{beam},i}$ | `polarizability`, `beams` |
+| Laser beam | — | Gaussian beam intensity profile | `LaserBeamPotential` |
+| Composite | list syntax | $V = \sum_i V_i$ | combination of the above |
+
+Composite potentials are defined with YAML list syntax:
 
 ```yaml
 potential:
@@ -194,117 +193,113 @@ potential:
     axis: 3
 ```
 
-## ガウシアンビーム光学
+## Gaussian Beam Optics
 
-`OpticalBeam` は複素ビームパラメータ q による正確なガウシアンビーム伝搬を実装。
+`OpticalBeam` implements exact Gaussian beam propagation via the complex beam parameter $q$.
 
 ```julia
 beam = OpticalBeam(wavelength=1064e-9, power=1.0, waist=50e-6)
 propagated = propagate(beam, abcd_free_space(0.1))
 
-w = waist_radius(beam)          # ビームウエスト半径
-zR = rayleigh_length(beam)      # レイリー長
-I0 = peak_intensity(beam)       # ピーク強度
+w  = waist_radius(beam)      # beam waist radius
+zR = rayleigh_length(beam)    # Rayleigh length
+I0 = peak_intensity(beam)     # peak intensity
 ```
 
-ABCD行列: `abcd_free_space`, `abcd_thin_lens`, `abcd_curved_mirror`, `abcd_flat_mirror`
+ABCD matrices: `abcd_free_space`, `abcd_thin_lens`, `abcd_curved_mirror`, `abcd_flat_mirror`
 
-ファイバー結合効率: `mode_overlap`, `fiber_coupling`
+Fiber coupling: `mode_overlap`, `fiber_coupling`
 
-Unitful対応: `OpticalBeam(wavelength=1064u"nm", power=1u"W", waist=50u"μm")`
+Unitful support: `OpticalBeam(wavelength=1064u"nm", power=1u"W", waist=50u"μm")`
 
-## 観測量
+## Observables
 
-### 基本量
+### Basic Quantities
 
-| 物理量 | 関数 | 説明 |
-|---|---|---|
-| 全密度 | `total_density(psi, ndim)` | Σ_m \|ψ_m\|² |
-| 成分密度 | `component_density(psi, ndim, c)` | \|ψ_c\|² |
-| 全ノルム | `total_norm(psi, grid)` | ∫n dV |
-| 磁化 | `magnetization(psi, grid, sys)` | ∫ Σ_m m\|ψ_m\|² dV |
-| スピン密度ベクトル | `spin_density_vector(psi, sm, ndim)` | 各点の (⟨Fx⟩, ⟨Fy⟩, ⟨Fz⟩) |
-| 全エネルギー | `total_energy(ws)` | E_kin + E_trap + E_Zee + E_c0 + E_c1 + E_ddi |
-| 成分占有率 | `component_populations(psi, grid, sys)` | 各スピン成分の規格化占有率 |
+| Observable | Function | Definition |
+|------------|----------|------------|
+| Total density | `total_density(psi, ndim)` | $n(\mathbf{r}) = \sum_m |\psi_m|^2$ |
+| Component density | `component_density(psi, ndim, c)` | $|\psi_c|^2$ |
+| Total norm | `total_norm(psi, grid)` | $\int n\, dV$ |
+| Magnetization | `magnetization(psi, grid, sys)` | $\int \sum_m m\,|\psi_m|^2\, dV$ |
+| Spin density vector | `spin_density_vector(psi, sm, ndim)` | $(\langle F_x \rangle, \langle F_y \rangle, \langle F_z \rangle)$ at each point |
+| Total energy | `total_energy(ws)` | $E_{\mathrm{kin}} + E_{\mathrm{trap}} + E_{\mathrm{Zee}} + E_{c_0} + E_{c_1} + E_{\mathrm{ddi}}$ |
+| Component populations | `component_populations(psi, grid, sys)` | Normalized occupation of each spin component |
 
-### 流体力学量
+### Hydrodynamic Quantities
 
-| 物理量 | 関数 | 説明 |
-|---|---|---|
-| 確率流密度 | `probability_current(psi, grid, plans)` | j(r) = Σ_c Im(ψ_c* ∇ψ_c) |
-| 超流動速度 | `superfluid_velocity(psi, grid, plans)` | v = j / n |
-| 軌道角運動量 | `orbital_angular_momentum(psi, grid, plans)` | ⟨L_z⟩ = ∫ ψ*(-i)(x∂_y - y∂_x)ψ dV |
-| 全角運動量 | `total_angular_momentum(psi, grid, plans, sys)` | J_z = L_z + S_z |
-| 超流動渦度 | `superfluid_vorticity(psi, grid, plans)` | ω = ∇ × v_s（2D: スカラー、3D: ベクトル） |
+| Observable | Function | Definition |
+|------------|----------|------------|
+| Probability current | `probability_current(psi, grid, plans)` | $\mathbf{j}(\mathbf{r}) = \sum_c \mathrm{Im}(\psi_c^{*} \nabla\psi_c)$ |
+| Superfluid velocity | `superfluid_velocity(psi, grid, plans)` | $\mathbf{v}_s = \mathbf{j}/n$ |
+| Orbital angular momentum | `orbital_angular_momentum(psi, grid, plans)` | $\langle L_z \rangle = \int \psi^{*}(-i)(x\partial_y - y\partial_x)\psi\, dV$ |
+| Total angular momentum | `total_angular_momentum(psi, grid, plans, sys)` | $J_z = L_z + S_z$ |
+| Superfluid vorticity | `superfluid_vorticity(psi, grid, plans)` | $\boldsymbol{\omega} = \nabla \times \mathbf{v}_s$ (2D: scalar, 3D: vector) |
 
-### トポロジカル量
+### Topological Quantities
 
-| 物理量 | 関数 | 説明 |
-|---|---|---|
-| Berry曲率 | `berry_curvature(psi, grid, plans, sm)` | Mermin-Ho関係: Ω = ŝ·(∂_iŝ × ∂_jŝ) |
-| スカーミオン電荷 | `spin_texture_charge(psi, grid, plans, sm)` | Q = (1/4πF) ∫ Ω d²r（2Dのみ） |
-| Majorana星 | `majorana_stars(spinor, F)` | Majorana多項式の根（2F個の星） |
-| 正二十面体秩序 | `icosahedral_order_parameter(psi, sm, ndim)` | Steinhardt Q₆ 結合秩序パラメータ（F≥6） |
+| Observable | Function | Definition |
+|------------|----------|------------|
+| Berry curvature | `berry_curvature(psi, grid, plans, sm)` | Mermin-Ho relation: $\Omega = \hat{\mathbf{s}} \cdot (\partial_i \hat{\mathbf{s}} \times \partial_j \hat{\mathbf{s}})$ |
+| Skyrmion charge | `spin_texture_charge(psi, grid, plans, sm)` | $Q = \frac{1}{4\pi F} \int \Omega\, d^2r$ (2D only) |
+| Majorana stars | `majorana_stars(spinor, F)` | Roots of the Majorana polynomial ($2F$ stars on $S^2$) |
+| Icosahedral order | `icosahedral_order_parameter(psi, sm, ndim)` | Steinhardt $Q_6$ bond-order parameter ($F \geq 6$) |
 
-## 診断ツール
+## Diagnostics
 
-| 関数 | 説明 |
-|---|---|
-| `spin_mixing_period(c1, q)` | スピン混合振動周期（無次元） |
-| `spin_mixing_period_si(c1, q)` | スピン混合振動周期（SI単位） |
-| `quadratic_zeeman_from_field(g_F, B, ΔE_hf)` | 磁場からの二次ゼーマンシフト |
-| `healing_length_contact(m, c0, n)` | 接触相互作用のヒーリング長 |
-| `healing_length_spin(m, c1, n)` | スピン相互作用のヒーリング長 |
-| `healing_length_ddi(m, C_dd, n)` | DDIのヒーリング長 |
-| `thomas_fermi_radius(density, x)` | 密度プロファイルからTFR抽出 |
-| `phase_diagram_point(...)` | 相図上の座標 (R_TF/ξ_sp, R_TF/ξ_dd) |
+| Function | Description |
+|----------|-------------|
+| `spin_mixing_period(c1, q)` | Spin mixing oscillation period (dimensionless) |
+| `spin_mixing_period_si(c1, q)` | Spin mixing oscillation period (SI units) |
+| `quadratic_zeeman_from_field(g_F, B, ΔE_hf)` | Quadratic Zeeman shift from magnetic field $B$ |
+| `healing_length_contact(m, c0, n)` | Healing length for contact interaction: $\xi = 1/\sqrt{2mc_0 n}$ |
+| `healing_length_spin(m, c1, n)` | Healing length for spin interaction: $\xi_s = 1/\sqrt{2m|c_1|n}$ |
+| `healing_length_ddi(m, C_dd, n)` | Healing length for DDI: $\xi_d = 1/\sqrt{2mC_{\mathrm{dd}}n}$ |
+| `thomas_fermi_radius(density, x)` | Extract Thomas-Fermi radius from density profile |
+| `phase_diagram_point(...)` | Phase diagram coordinates $(R_{\mathrm{TF}}/\xi_s,\; R_{\mathrm{TF}}/\xi_d)$ |
 
-## 入出力
+## I/O
 
 ```julia
-# 基底状態探索
+# Ground state search
 result = find_ground_state(; grid, atom, interactions, potential,
     dt=0.005, n_steps=5000, tol=1e-10, initial_state=:polar)
 
-# 実時間発展
+# Real-time evolution
 ws = make_workspace(; grid, atom, interactions, ...)
 result = run_simulation!(ws; callback=nothing)
 
-# 状態保存/読み込み（JLD2形式）
+# State save/load (JLD2 format)
 save_state("checkpoint.jld2", ws)
 state = load_state("checkpoint.jld2")
 ```
 
-## 単位系
+## Units
 
-`Units` サブモジュールでSI定数を定義:
+The `Units` submodule provides SI constants:
 
-| 定数 | 記号 |
-|---|---|
-| ディラック定数 | `Units.HBAR` |
-| 原子質量単位 | `Units.AMU` |
-| ボーア半径 | `Units.A_BOHR` |
-| ボーア磁子 | `Units.MU_BOHR` |
-| 真空透磁率 | `Units.MU_0` |
-| ボルツマン定数 | `Units.K_B` |
+| Constant | Symbol |
+|----------|--------|
+| Reduced Planck constant | `Units.HBAR` |
+| Atomic mass unit | `Units.AMU` |
+| Bohr radius | `Units.BOHR_RADIUS` |
+| Bohr magneton | `Units.MU_BOHR` |
+| Vacuum permeability | `Units.MU_0` |
+| Boltzmann constant | `Units.K_B` |
 
-`DimensionlessScales` で調和振動子基準の無次元化/次元化変換を提供。
+`DimensionlessScales` provides conversion between SI and dimensionless harmonic oscillator units ($\hbar = m = 1$).
 
-Unitful.jl による物理単位付き量の直接入力にも対応。
+Unitful.jl quantities are accepted directly as input.
 
-## 可視化（弱依存拡張）
+## Visualization (Weak-dependency Extensions)
 
-| 拡張 | 機能 |
-|---|---|
+| Extension | Capabilities |
+|-----------|-------------|
 | PlotlyJS | `plot_density`, `plot_spinor`, `plot_spin_texture`, `animate_dynamics` |
-| Makie | 3Dサーフェス、ボリュームレンダリング、リアルタイムアニメーション |
+| Makie | 3D surfaces, volume rendering, real-time animation |
 
-## アーキテクチャ
-
-詳細は [docs/architecture.md](docs/architecture.md) を参照。
-
-## テスト
+## Testing
 
 ```bash
-julia --project=. -e 'using Pkg; Pkg.test()'  # 全4734テスト
+julia --project=. -e 'using Pkg; Pkg.test()'
 ```
