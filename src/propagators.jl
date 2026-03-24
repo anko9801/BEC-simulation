@@ -32,28 +32,39 @@ end
 function apply_diagonal_potential_step!(
     psi::AbstractArray{ComplexF64},
     V_trap::AbstractArray{Float64},
-    zeeman_diag::AbstractVector{Float64},
+    zeeman_diag,
     c0::Float64,
     dt_frac::Float64,
     n_components::Int,
-    ndim::Int;
+    ndim::Int,
+    density_buf::AbstractArray{Float64};
     imaginary_time::Bool=false,
 )
     n_pts = ntuple(d -> size(psi, d), ndim)
 
-    n_total = _total_density(psi, n_components, ndim, n_pts)
+    _total_density!(density_buf, psi, n_components, ndim, n_pts)
 
     for c in 1:n_components
         idx = _component_slice(ndim, n_pts, c)
         psi_view = view(psi, idx...)
 
         if imaginary_time
-            @. psi_view *= exp(-(V_trap + zeeman_diag[c] + c0 * n_total) * dt_frac)
+            @. psi_view *= exp(-(V_trap + zeeman_diag[c] + c0 * density_buf) * dt_frac)
         else
-            @. psi_view *= exp(-1im * (V_trap + zeeman_diag[c] + c0 * n_total) * dt_frac)
+            @. psi_view *= exp(-1im * (V_trap + zeeman_diag[c] + c0 * density_buf) * dt_frac)
         end
     end
     nothing
+end
+
+function _total_density!(buf::AbstractArray{Float64}, psi::AbstractArray{ComplexF64}, n_components::Int, ndim::Int, n_pts)
+    idx1 = _component_slice(ndim, n_pts, 1)
+    buf .= abs2.(view(psi, idx1...))
+    for c in 2:n_components
+        idx = _component_slice(ndim, n_pts, c)
+        buf .+= abs2.(view(psi, idx...))
+    end
+    buf
 end
 
 function _total_density(psi::AbstractArray{ComplexF64}, n_components::Int, ndim::Int, n_pts)

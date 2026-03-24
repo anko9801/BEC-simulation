@@ -15,8 +15,8 @@ end
 end
 
 function _exp_i_hermitian(H::SMatrix{D,D,ComplexF64}, dt::Float64, imaginary_time::Bool) where {D}
-    eig = eigen(Hermitian(Matrix(H)))
-    V = SMatrix{D,D,ComplexF64}(eig.vectors)
+    eig = eigen(Hermitian(H))
+    V = eig.vectors
 
     if imaginary_time
         expD = SVector{D,ComplexF64}(exp.(-eig.values .* dt))

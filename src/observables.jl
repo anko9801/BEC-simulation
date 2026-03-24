@@ -47,12 +47,36 @@ function spin_density_vector(psi::AbstractArray{ComplexF64}, sm::SpinMatrices, n
     (fx, fy, fz)
 end
 
+"""
+Exploit spin matrix sparsity: Fz is diagonal, Fx/Fy are tridiagonal.
+
+    Fz: ⟨ψ|Fz|ψ⟩ = Σ_c m_c |ψ_c|²
+    Fx + iFy = ⟨ψ|F+|ψ⟩ = Σ_{c=2}^D f+(m_c) ψ*_{c-1} ψ_c
+
+O(D) per point instead of O(D²).
+"""
 function _compute_spin_density!(fx, fy, fz, psi, sm, n_comp, ndim, n_pts)
+    F = sm.system.F
+    Ff1 = Float64(F * (F + 1))
+    m_vals = ntuple(c -> Float64(F - (c - 1)), n_comp)
+    fp_coeffs = ntuple(c -> c == 1 ? 0.0 : sqrt(Ff1 - m_vals[c] * (m_vals[c] + 1.0)), n_comp)
+
     @inbounds for I in CartesianIndices(n_pts)
-        spinor = _get_spinor(psi, I, n_comp)
-        fx[I] = real(dot(spinor, sm.Fx * spinor))
-        fy[I] = real(dot(spinor, sm.Fy * spinor))
-        fz[I] = real(dot(spinor, sm.Fz * spinor))
+        fz_val = 0.0
+        for c in 1:n_comp
+            fz_val += m_vals[c] * abs2(psi[I, c])
+        end
+        fz[I] = fz_val
+
+        fxy_re = 0.0
+        fxy_im = 0.0
+        for c in 2:n_comp
+            prod = conj(psi[I, c - 1]) * psi[I, c]
+            fxy_re += fp_coeffs[c] * real(prod)
+            fxy_im += fp_coeffs[c] * imag(prod)
+        end
+        fx[I] = fxy_re
+        fy[I] = fxy_im
     end
 end
 

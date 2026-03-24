@@ -193,7 +193,9 @@ struct DDIBuffers{N}
     Fx_r::Array{Float64,N}
     Fy_r::Array{Float64,N}
     Fz_r::Array{Float64,N}
-    Fk::Array{ComplexF64,N}
+    Fx_k::Array{ComplexF64,N}
+    Fy_k::Array{ComplexF64,N}
+    Fz_k::Array{ComplexF64,N}
     Phi_x::Array{ComplexF64,N}
     Phi_y::Array{ComplexF64,N}
     Phi_z::Array{ComplexF64,N}
@@ -206,6 +208,7 @@ struct Workspace{N,A,P,IP}
     fft_plans::FFTPlans{P,IP}
     kinetic_phase::Array{ComplexF64,N}
     potential_values::Array{Float64,N}
+    density_buf::Array{Float64,N}
     spin_matrices::SpinMatrices
     grid::Grid{N}
     atom::AtomSpecies
