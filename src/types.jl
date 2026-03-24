@@ -90,6 +90,14 @@ struct TimeDependentZeeman
     B_func::Function  # t -> ZeemanParams
 end
 
+# --- Raman Coupling ---
+
+struct RamanCoupling{N}
+    Omega_R::Float64          # Rabi frequency
+    delta::Float64            # two-photon detuning
+    k_eff::NTuple{N,Float64}  # effective wave vector (difference of two beams)
+end
+
 # --- Potential ---
 
 abstract type AbstractPotential end
@@ -196,4 +204,5 @@ struct Workspace{N,A,P,IP}
     sim_params::SimParams
     ddi::Union{Nothing,DDIParams{N}}
     ddi_bufs::Union{Nothing,DDIBuffers{N}}
+    raman::Union{Nothing,RamanCoupling{N}}
 end

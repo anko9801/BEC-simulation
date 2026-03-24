@@ -16,4 +16,9 @@ using SpinorBEC
     include("test_physics_level1.jl")
     include("test_physics_level2.jl")
     include("test_physics_level3.jl")
+    include("test_optics.jl")
+    include("test_thomas_fermi.jl")
+    include("test_laser_potential.jl")
+    include("test_raman.jl")
+    include("test_adaptive_dt.jl")
 end

@@ -26,6 +26,9 @@ Apply exp(-i c1 (F_local · F) dt) to a single spinor.
 H_spin = c1 * (⟨Fx⟩ Fx + ⟨Fy⟩ Fy + ⟨Fz⟩ Fz) is Hermitian.
 Real time:      U = exp(-i H_spin dt)
 Imaginary time: U = exp(-H_spin dt)
+
+For spin-1 (D=3), uses Rodrigues' formula (allocation-free).
+For higher spins, falls back to eigendecomposition.
 """
 function _apply_spin_rotation(
     spinor::SVector{D,ComplexF64},
@@ -44,3 +47,38 @@ function _apply_spin_rotation(
     U * spinor
 end
 
+"""
+Spin-1 specialization using Rodrigues' formula.
+
+For H = c1*|f⃗|*(n̂·F⃗), eigenvalues are c1*|f⃗|*{-1,0,1}.
+exp(-iθ(n̂·F⃗)) = I - i·sin(θ)·(n̂·F⃗) + (cos(θ)-1)·(n̂·F⃗)²
+exp(-θ(n̂·F⃗))  = I - sinh(θ)·(n̂·F⃗) + (cosh(θ)-1)·(n̂·F⃗)²
+"""
+function _apply_spin_rotation(
+    spinor::SVector{3,ComplexF64},
+    sm::SpinMatrices{3},
+    c1::Float64,
+    dt_frac::Float64,
+    imaginary_time::Bool,
+)
+    fx = real(dot(spinor, sm.Fx * spinor))
+    fy = real(dot(spinor, sm.Fy * spinor))
+    fz = real(dot(spinor, sm.Fz * spinor))
+
+    f_mag = sqrt(fx^2 + fy^2 + fz^2)
+
+    if f_mag < 1e-30
+        return spinor
+    end
+
+    nF = (fx * sm.Fx + fy * sm.Fy + fz * sm.Fz) / f_mag
+    nF2 = nF * nF
+    θ = c1 * f_mag * dt_frac
+
+    if imaginary_time
+        U = SMatrix{3,3,ComplexF64}(I) - sinh(θ) * nF + (cosh(θ) - 1) * nF2
+    else
+        U = SMatrix{3,3,ComplexF64}(I) - 1im * sin(θ) * nF + (cos(θ) - 1) * nF2
+    end
+    U * spinor
+end

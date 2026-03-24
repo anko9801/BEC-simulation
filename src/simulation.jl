@@ -51,6 +51,7 @@ function make_workspace(;
     psi_init::Union{Nothing,AbstractArray{ComplexF64}}=nothing,
     enable_ddi::Bool=false,
     c_dd::Float64=NaN,
+    raman::Union{Nothing,RamanCoupling{N}}=nothing,
 ) where {N}
     sys = SpinSystem(atom.F)
     sm = spin_matrices(atom.F)
@@ -83,7 +84,7 @@ function make_workspace(;
 
     Workspace{N,typeof(psi),typeof(plans.forward),typeof(plans.inverse)}(
         state, plans, kinetic_phase, V, sm, grid, atom, interactions, zeeman, potential, sim_params,
-        ddi, ddi_bufs,
+        ddi, ddi_bufs, raman,
     )
 end
 
@@ -108,9 +109,9 @@ function find_ground_state(;
     psi_init=nothing,
     enable_ddi::Bool=false,
     c_dd::Float64=NaN,
+    adaptive_dt::Bool=false,
+    dt_max::Float64=10.0 * dt,
 )
-    sp = SimParams(; dt, n_steps, imaginary_time=true, normalize_every=1, save_every=max(1, n_steps ÷ 10))
-
     psi0 = if psi_init === nothing
         sys = SpinSystem(atom.F)
         init_psi(grid, sys; state=initial_state)
@@ -118,6 +119,14 @@ function find_ground_state(;
         copy(psi_init)
     end
 
+    if adaptive_dt
+        return _find_ground_state_adaptive(;
+            grid, atom, interactions, zeeman, potential,
+            dt, n_steps, tol, psi0, enable_ddi, c_dd, dt_max,
+        )
+    end
+
+    sp = SimParams(; dt, n_steps, imaginary_time=true, normalize_every=1, save_every=max(1, n_steps ÷ 10))
     ws = make_workspace(; grid, atom, interactions, zeeman, potential, sim_params=sp, psi_init=psi0, enable_ddi, c_dd)
 
     E_prev = total_energy(ws)
@@ -137,6 +146,74 @@ function find_ground_state(;
     end
 
     (workspace=ws, converged=converged, energy=total_energy(ws))
+end
+
+"""
+Adaptive dt ground state search.
+
+Strategy: run check_every steps, then evaluate energy.
+- Energy decreased → grow dt by 10% (capped at dt_max)
+- Energy increased → revert psi, halve dt, retry
+"""
+function _find_ground_state_adaptive(;
+    grid, atom, interactions, zeeman, potential,
+    dt, n_steps, tol, psi0, enable_ddi, c_dd, dt_max,
+)
+    current_dt = dt
+    check_every = max(1, n_steps ÷ 100)
+    psi_current = copy(psi0)
+    psi_backup = similar(psi0)
+
+    sp = SimParams(; dt=current_dt, n_steps=check_every, imaginary_time=true,
+                   normalize_every=1, save_every=check_every)
+    ws = make_workspace(; grid, atom, interactions, zeeman, potential,
+                        sim_params=sp, psi_init=psi_current, enable_ddi, c_dd)
+    E_prev = total_energy(ws)
+    converged = false
+    total_steps = 0
+
+    while total_steps < n_steps
+        copyto!(psi_backup, ws.state.psi)
+
+        for _ in 1:check_every
+            split_step!(ws)
+        end
+        total_steps += check_every
+
+        E = total_energy(ws)
+
+        if E > E_prev
+            copyto!(ws.state.psi, psi_backup)
+            current_dt = max(current_dt * 0.5, 1e-8)
+            ws = _rebuild_workspace_with_dt(ws, current_dt)
+        else
+            dE = abs(E - E_prev)
+            if dE < tol
+                converged = true
+                break
+            end
+            E_prev = E
+            new_dt = min(current_dt * 1.1, dt_max)
+            if new_dt != current_dt
+                current_dt = new_dt
+                ws = _rebuild_workspace_with_dt(ws, current_dt)
+            end
+        end
+    end
+
+    (workspace=ws, converged=converged, energy=total_energy(ws))
+end
+
+function _rebuild_workspace_with_dt(ws::Workspace{N}, new_dt::Float64) where {N}
+    sp = SimParams(new_dt, ws.sim_params.n_steps, true,
+                   ws.sim_params.normalize_every, ws.sim_params.save_every)
+    kinetic_phase = prepare_kinetic_phase(ws.grid, new_dt; imaginary_time=true)
+
+    Workspace{N,typeof(ws.state.psi),typeof(ws.fft_plans.forward),typeof(ws.fft_plans.inverse)}(
+        ws.state, ws.fft_plans, kinetic_phase, ws.potential_values,
+        ws.spin_matrices, ws.grid, ws.atom, ws.interactions,
+        ws.zeeman, ws.potential, sp, ws.ddi, ws.ddi_bufs, ws.raman,
+    )
 end
 
 function run_simulation!(ws::Workspace{N};

@@ -18,8 +18,12 @@ include("zeeman.jl")
 include("propagators.jl")
 include("spin_mixing.jl")
 include("split_step.jl")
+include("raman.jl")
 include("ddi.jl")
 include("optical_trap.jl")
+include("optics.jl")
+include("laser_potential.jl")
+include("thomas_fermi.jl")
 include("observables.jl")
 include("simulation.jl")
 include("io.jl")
@@ -57,11 +61,26 @@ export zeeman_diagonal, zeeman_energies, TimeDependentZeeman, zeeman_at
 # Optical trap
 export GaussianBeam, CrossedDipoleTrap
 
+# Optics (Gaussian beam with complex q, ABCD)
+export OpticalBeam, propagate, waist_radius, rayleigh_length
+export radius_of_curvature, divergence_angle, peak_intensity, beam_intensity
+export abcd_free_space, abcd_thin_lens, abcd_curved_mirror, abcd_flat_mirror
+export mode_overlap, fiber_coupling
+
+# Laser beam potential
+export LaserBeamPotential, crossed_laser_trap
+
+# Thomas-Fermi
+export thomas_fermi_density, init_psi_thomas_fermi
+
 # Propagators
 export apply_kinetic_step!, apply_diagonal_potential_step!
 
 # Spin mixing
 export apply_spin_mixing_step!
+
+# Raman coupling
+export RamanCoupling, apply_raman_step!
 
 # Split-step
 export split_step!, prepare_kinetic_phase

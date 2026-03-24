@@ -61,6 +61,14 @@ function _half_potential_step!(ws::Workspace{N}, dt_half, n_comp, ndim, imaginar
         )
     end
 
+    if ws.raman !== nothing
+        apply_raman_step!(
+            ws.state.psi, ws.spin_matrices, ws.raman,
+            ws.grid, dt_half;
+            imaginary_time,
+        )
+    end
+
     apply_diagonal_potential_step!(
         ws.state.psi, ws.potential_values, zeeman_diag,
         ws.interactions.c0, dt_half / 2, n_comp, ndim;
