@@ -52,6 +52,7 @@ function make_workspace(;
     enable_ddi::Bool=false,
     c_dd::Float64=NaN,
     raman::Union{Nothing,RamanCoupling{N}}=nothing,
+    loss::Union{Nothing,LossParams}=nothing,
 ) where {N}
     sys = SpinSystem(atom.F)
     sm = spin_matrices(atom.F)
@@ -86,7 +87,7 @@ function make_workspace(;
 
     Workspace{N,typeof(psi),typeof(plans.forward),typeof(plans.inverse)}(
         state, plans, kinetic_phase, V, density_buf, sm, grid, atom, interactions, zeeman, potential, sim_params,
-        ddi, ddi_bufs, raman,
+        ddi, ddi_bufs, raman, loss,
     )
 end
 
@@ -233,7 +234,7 @@ function _rebuild_workspace_with_dt(ws::Workspace{N}, new_dt::Float64) where {N}
     Workspace{N,typeof(ws.state.psi),typeof(ws.fft_plans.forward),typeof(ws.fft_plans.inverse)}(
         ws.state, ws.fft_plans, kinetic_phase, ws.potential_values, ws.density_buf,
         ws.spin_matrices, ws.grid, ws.atom, ws.interactions,
-        ws.zeeman, ws.potential, sp, ws.ddi, ws.ddi_bufs, ws.raman,
+        ws.zeeman, ws.potential, sp, ws.ddi, ws.ddi_bufs, ws.raman, ws.loss,
     )
 end
 

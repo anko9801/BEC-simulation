@@ -18,6 +18,7 @@ include("potentials.jl")
 include("zeeman.jl")
 include("propagators.jl")
 include("spin_mixing.jl")
+include("losses.jl")
 include("split_step.jl")
 include("raman.jl")
 include("ddi.jl")
@@ -37,7 +38,7 @@ include("unitful_support.jl")
 
 # Types
 export GridConfig, Grid, SpinSystem, SpinMatrices
-export AtomSpecies, InteractionParams, ZeemanParams
+export AtomSpecies, InteractionParams, ZeemanParams, LossParams
 export SimParams, SimState, FFTPlans, Workspace
 export HarmonicTrap, NoPotential, GravityPotential, CompositePotential
 
@@ -83,6 +84,9 @@ export apply_kinetic_step!, apply_diagonal_potential_step!
 
 # Spin mixing
 export apply_spin_mixing_step!
+
+# Losses
+export apply_loss_step!
 
 # Raman coupling
 export RamanCoupling, apply_raman_step!

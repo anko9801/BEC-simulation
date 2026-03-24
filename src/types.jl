@@ -201,6 +201,15 @@ struct DDIBuffers{N}
     Phi_z::Array{ComplexF64,N}
 end
 
+# --- Loss Parameters ---
+
+struct LossParams
+    gamma_dr::Float64
+    L3::Float64
+end
+
+LossParams(gamma_dr::Float64) = LossParams(gamma_dr, 0.0)
+
 # --- Workspace ---
 
 struct Workspace{N,A,P,IP}
@@ -219,4 +228,5 @@ struct Workspace{N,A,P,IP}
     ddi::Union{Nothing,DDIParams{N}}
     ddi_bufs::Union{Nothing,DDIBuffers{N}}
     raman::Union{Nothing,RamanCoupling{N}}
+    loss::Union{Nothing,LossParams}
 end

@@ -28,4 +28,5 @@ using SpinorBEC
     include("test_vorticity_berry.jl")
     include("test_majorana.jl")
     include("test_diagnostics.jl")
+    include("test_losses.jl")
 end
