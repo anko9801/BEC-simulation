@@ -1,0 +1,60 @@
+experiment:
+  name: "Rb87 quench dynamics (1D)"
+
+  system:
+    atom: Rb87
+    grid:
+      n_points: [256]
+      box_size: [30.0]
+    interactions:
+      c0: 10.0
+      c1: -0.5
+
+  # Start from ferromagnetic ground state in a harmonic trap
+  ground_state:
+    dt: 0.005
+    n_steps: 10000
+    tol: 1.0e-10
+    initial_state: ferromagnetic
+    zeeman:
+      p: 0.0
+      q: 0.1
+    potential:
+      type: harmonic
+      omega: [1.0]
+
+  sequence:
+    # Ramp quadratic Zeeman field
+    - name: ramp_field
+      duration: 5.0
+      dt: 0.001
+      save_every: 100
+      zeeman:
+        p: 0.0
+        q:
+          from: 0.1
+          to: -0.5
+      potential:
+        type: harmonic
+        omega: [1.0]
+
+    # Hold and let spin dynamics evolve
+    - name: hold
+      duration: 10.0
+      dt: 0.001
+      save_every: 200
+      zeeman:
+        p: 0.0
+        q: -0.5
+      # potential inherited from previous phase
+
+    # Release from trap
+    - name: free_expansion
+      duration: 2.0
+      dt: 0.0005
+      save_every: 50
+      zeeman:
+        p: 0.0
+        q: 0.0
+      potential:
+        type: none

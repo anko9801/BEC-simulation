@@ -65,7 +65,10 @@ struct AtomSpecies
     F::Int
     a0::Float64         # m (F_tot=0 scattering length)
     a2::Float64         # m (F_tot=2 scattering length)
+    mu_mag::Float64     # J/T (magnetic dipole moment, 0.0 for non-dipolar)
 end
+
+AtomSpecies(name, mass, F, a0, a2) = AtomSpecies(name, mass, F, a0, a2, 0.0)
 
 # --- Interaction Parameters ---
 
@@ -83,6 +86,10 @@ end
 
 ZeemanParams() = ZeemanParams(0.0, 0.0)
 
+struct TimeDependentZeeman
+    B_func::Function  # t -> ZeemanParams
+end
+
 # --- Potential ---
 
 abstract type AbstractPotential end
@@ -93,8 +100,25 @@ end
 
 HarmonicTrap(omega::Float64) = HarmonicTrap((omega,))
 HarmonicTrap(ox::Float64, oy::Float64) = HarmonicTrap((ox, oy))
+HarmonicTrap(ox::Float64, oy::Float64, oz::Float64) = HarmonicTrap((ox, oy, oz))
 
 struct NoPotential <: AbstractPotential end
+
+struct GravityPotential{N} <: AbstractPotential
+    g::Float64
+    axis::Int
+
+    function GravityPotential{N}(g::Float64, axis::Int) where {N}
+        1 <= axis <= N || throw(ArgumentError("axis must be between 1 and $N"))
+        new{N}(g, axis)
+    end
+end
+
+GravityPotential(g::Float64, axis::Int, ndim::Int) = GravityPotential{ndim}(g, axis)
+
+struct CompositePotential{N} <: AbstractPotential
+    components::Vector{AbstractPotential}
+end
 
 # --- Simulation Parameters ---
 
@@ -134,6 +158,28 @@ struct FFTPlans{P,IP}
     inverse::IP
 end
 
+# --- DDI ---
+
+struct DDIParams{N}
+    C_dd::Float64
+    Q_xx::Array{Float64,N}
+    Q_xy::Array{Float64,N}
+    Q_xz::Array{Float64,N}
+    Q_yy::Array{Float64,N}
+    Q_yz::Array{Float64,N}
+    Q_zz::Array{Float64,N}
+end
+
+struct DDIBuffers{N}
+    Fx_r::Array{Float64,N}
+    Fy_r::Array{Float64,N}
+    Fz_r::Array{Float64,N}
+    Fk::Array{ComplexF64,N}
+    Phi_x::Array{ComplexF64,N}
+    Phi_y::Array{ComplexF64,N}
+    Phi_z::Array{ComplexF64,N}
+end
+
 # --- Workspace ---
 
 struct Workspace{N,A,P,IP}
@@ -145,7 +191,9 @@ struct Workspace{N,A,P,IP}
     grid::Grid{N}
     atom::AtomSpecies
     interactions::InteractionParams
-    zeeman::ZeemanParams
+    zeeman::Union{ZeemanParams,TimeDependentZeeman}
     potential::AbstractPotential
     sim_params::SimParams
+    ddi::Union{Nothing,DDIParams{N}}
+    ddi_bufs::Union{Nothing,DDIBuffers{N}}
 end

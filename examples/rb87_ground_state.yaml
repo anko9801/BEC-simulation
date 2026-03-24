@@ -1,0 +1,25 @@
+experiment:
+  name: "Rb87 ferromagnetic ground state (1D)"
+
+  system:
+    atom: Rb87
+    grid:
+      n_points: [256]
+      box_size: [30.0]
+    interactions:
+      c0: 10.0
+      c1: -0.5
+
+  ground_state:
+    dt: 0.005
+    n_steps: 10000
+    tol: 1.0e-10
+    initial_state: ferromagnetic
+    zeeman:
+      p: 0.0
+      q: 0.0
+    potential:
+      type: harmonic
+      omega: [1.0]
+
+  sequence: []

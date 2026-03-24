@@ -24,17 +24,14 @@ function init_psi(grid::Grid{N}, sys::SpinSystem; state::Symbol=:polar) where {N
     psi
 end
 
-function _gaussian(grid::Grid{1}, sigma::NTuple{1,Float64})
-    @. exp(-grid.x[1]^2 / (2 * sigma[1]^2))
-end
-
-function _gaussian(grid::Grid{2}, sigma::NTuple{2,Float64})
-    nx, ny = grid.config.n_points
-    g = zeros(Float64, nx, ny)
-    x, y = grid.x
-    sx, sy = sigma
-    for j in 1:ny, i in 1:nx
-        g[i, j] = exp(-(x[i]^2 / (2sx^2) + y[j]^2 / (2sy^2)))
+function _gaussian(grid::Grid{N}, sigma::NTuple{N,Float64}) where {N}
+    g = zeros(Float64, grid.config.n_points)
+    @inbounds for I in CartesianIndices(grid.config.n_points)
+        s = 0.0
+        for d in 1:N
+            s += grid.x[d][I[d]]^2 / (2 * sigma[d]^2)
+        end
+        g[I] = exp(-s)
     end
     g
 end
@@ -48,14 +45,15 @@ function make_workspace(;
     grid::Grid{N},
     atom::AtomSpecies,
     interactions::InteractionParams,
-    zeeman::ZeemanParams=ZeemanParams(),
+    zeeman::Union{ZeemanParams,TimeDependentZeeman}=ZeemanParams(),
     potential::AbstractPotential=NoPotential(),
     sim_params::SimParams,
     psi_init::Union{Nothing,AbstractArray{ComplexF64}}=nothing,
+    enable_ddi::Bool=false,
+    c_dd::Float64=NaN,
 ) where {N}
     sys = SpinSystem(atom.F)
     sm = spin_matrices(atom.F)
-    nc = sys.n_components
 
     psi = if psi_init === nothing
         init_psi(grid, sys)
@@ -70,8 +68,22 @@ function make_workspace(;
     kinetic_phase = prepare_kinetic_phase(grid, sim_params.dt; imaginary_time=sim_params.imaginary_time)
     V = evaluate_potential(potential, grid)
 
+    ddi = if enable_ddi
+        c_dd_val = isnan(c_dd) ? compute_c_dd(atom) : c_dd
+        make_ddi_params(grid, atom; c_dd=c_dd_val)
+    else
+        nothing
+    end
+
+    ddi_bufs = if ddi !== nothing
+        make_ddi_buffers(grid.config.n_points)
+    else
+        nothing
+    end
+
     Workspace{N,typeof(psi),typeof(plans.forward),typeof(plans.inverse)}(
         state, plans, kinetic_phase, V, sm, grid, atom, interactions, zeeman, potential, sim_params,
+        ddi, ddi_bufs,
     )
 end
 
@@ -94,6 +106,8 @@ function find_ground_state(;
     tol=1e-10,
     initial_state=:polar,
     psi_init=nothing,
+    enable_ddi::Bool=false,
+    c_dd::Float64=NaN,
 )
     sp = SimParams(; dt, n_steps, imaginary_time=true, normalize_every=1, save_every=max(1, n_steps ÷ 10))
 
@@ -104,7 +118,7 @@ function find_ground_state(;
         copy(psi_init)
     end
 
-    ws = make_workspace(; grid, atom, interactions, zeeman, potential, sim_params=sp, psi_init=psi0)
+    ws = make_workspace(; grid, atom, interactions, zeeman, potential, sim_params=sp, psi_init=psi0, enable_ddi, c_dd)
 
     E_prev = total_energy(ws)
     converged = false
@@ -129,7 +143,6 @@ function run_simulation!(ws::Workspace{N};
     callback::Union{Nothing,Function}=nothing,
 ) where {N}
     sp = ws.sim_params
-    ndim = N
     sys = ws.spin_matrices.system
 
     times = Float64[]

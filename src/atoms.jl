@@ -18,6 +18,7 @@ const Eu151 = AtomSpecies(
     "151Eu",
     150.919857 * Units.AMU,
     6,
-    0.0,    # placeholder
-    0.0,    # placeholder
+    110.0 * Units.BOHR_RADIUS,  # a_s (s-wave scattering length)
+    0.0,                         # a2 unused (use c0 + DDI only)
+    7.0 * Units.MU_BOHR,        # μ = 7 μ_B
 )

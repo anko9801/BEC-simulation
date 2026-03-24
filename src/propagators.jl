@@ -29,12 +29,6 @@ function apply_kinetic_step!(
     nothing
 end
 
-function _component_slice(ndim::Int, n_pts::NTuple{N,Int}, c::Int) where {N}
-    ntuple(N + 1) do d
-        d <= N ? (1:n_pts[d]) : c
-    end
-end
-
 function apply_diagonal_potential_step!(
     psi::AbstractArray{ComplexF64},
     V_trap::AbstractArray{Float64},

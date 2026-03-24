@@ -22,15 +22,14 @@ function make_grid(config::GridConfig{N}) where {N}
     Grid{N}(config, x, dx, k, dk, k_squared)
 end
 
-function _compute_k_squared(k::NTuple{1,Vector{Float64}}, ::NTuple{1,Int})
-    k[1] .^ 2
-end
-
-function _compute_k_squared(k::NTuple{2,Vector{Float64}}, n_points::NTuple{2,Int})
+function _compute_k_squared(k::NTuple{N,Vector{Float64}}, n_points::NTuple{N,Int}) where {N}
     ksq = zeros(Float64, n_points)
-    kx, ky = k
-    for j in 1:n_points[2], i in 1:n_points[1]
-        ksq[i, j] = kx[i]^2 + ky[j]^2
+    @inbounds for I in CartesianIndices(n_points)
+        s = 0.0
+        for d in 1:N
+            s += k[d][I[d]]^2
+        end
+        ksq[I] = s
     end
     ksq
 end

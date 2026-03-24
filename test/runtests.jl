@@ -9,4 +9,7 @@ using SpinorBEC
     include("test_split_step.jl")
     include("test_observables.jl")
     include("test_simulation.jl")
+    include("test_3d.jl")
+    include("test_ddi.jl")
+    include("test_experiment.jl")
 end

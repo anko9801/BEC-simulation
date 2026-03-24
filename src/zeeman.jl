@@ -8,9 +8,9 @@ function zeeman_energies(z::ZeemanParams, sys::SpinSystem)
     [(-z.p * m + z.q * m^2) for m in sys.m_values]
 end
 
-"""
-Return diagonal Zeeman matrix (StaticVector) for spin-1.
-"""
 function zeeman_diagonal(z::ZeemanParams, sys::SpinSystem)
     SVector{sys.n_components,Float64}(zeeman_energies(z, sys))
 end
+
+zeeman_at(z::ZeemanParams, ::Float64) = z
+zeeman_at(z::TimeDependentZeeman, t::Float64) = z.B_func(t)

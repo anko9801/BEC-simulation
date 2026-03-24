@@ -35,6 +35,40 @@ function compute_interaction_params(atom::AtomSpecies; N_atoms::Int=1, dims::Int
     InteractionParams(c0, c1)
 end
 
+"""
+Density-only contact interaction for general F.
+c0 = 4πℏ² a_s / m (no spin channels, just s-wave scattering length a0).
+"""
+function compute_c0(atom::AtomSpecies; N_atoms::Int=1, dims::Int=1, length_scale::Float64=1.0)
+    hbar = Units.HBAR
+    c0_3d = 4π * hbar^2 * atom.a0 / atom.mass
+
+    if dims == 1
+        c0_3d / (2π * length_scale^2) * N_atoms
+    elseif dims == 2
+        c0_3d / (sqrt(2π) * length_scale) * N_atoms
+    else
+        c0_3d * N_atoms
+    end
+end
+
+"""
+DDI coupling constant: C_dd = μ₀ μ² / (4π).
+Returns C_dd in SI (J·m³). Zero for non-dipolar atoms.
+"""
+function compute_c_dd(atom::AtomSpecies)
+    atom.mu_mag == 0.0 && return 0.0
+    Units.MU_0 * atom.mu_mag^2 / (4π)
+end
+
+"""
+Dipolar length: a_dd = μ₀ μ² m / (12π ℏ²).
+"""
+function compute_a_dd(atom::AtomSpecies)
+    atom.mu_mag == 0.0 && return 0.0
+    Units.MU_0 * atom.mu_mag^2 * atom.mass / (12π * Units.HBAR^2)
+end
+
 function compute_interaction_params_dimless(atom::AtomSpecies; N_atoms::Int=1, dims::Int=1, omega::Float64=1.0)
     hbar = Units.HBAR
     m = atom.mass

@@ -4,6 +4,8 @@ const HBAR = 1.054571817e-34      # J·s
 const AMU = 1.66053906660e-27     # kg
 const BOHR_RADIUS = 5.29177210903e-11  # m
 const BOHR_MAGNETON = 9.2740100783e-24 # J/T
+const MU_BOHR = BOHR_MAGNETON    # alias
+const MU_0 = 1.25663706212e-6    # N/A² (vacuum permeability)
 const KB = 1.380649e-23           # J/K
 
 struct DimensionlessScales
