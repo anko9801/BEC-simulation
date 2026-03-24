@@ -36,8 +36,8 @@ end
 
 function make_fft_plans(spatial_shape::NTuple{N,Int}) where {N}
     buf = zeros(ComplexF64, spatial_shape)
-    fwd = plan_fft!(buf)
-    inv = plan_ifft!(buf)
+    fwd = plan_fft!(buf; flags=FFTW.MEASURE)
+    inv = plan_ifft!(buf; flags=FFTW.MEASURE)
     FFTPlans(fwd, inv)
 end
 
