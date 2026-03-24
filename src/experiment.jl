@@ -110,7 +110,15 @@ function _parse_system(d::Dict)
     box_size = _to_float_vec(g["box_size"])
 
     inter = d["interactions"]
-    interactions = InteractionParams(Float64(inter["c0"]), Float64(inter["c1"]))
+    c0 = Float64(inter["c0"])
+    c1 = Float64(inter["c1"])
+    c_extra = Float64[]
+    n = 2
+    while haskey(inter, "c$n")
+        push!(c_extra, Float64(inter["c$n"]))
+        n += 1
+    end
+    interactions = InteractionParams(c0, c1, c_extra)
 
     ddi = if haskey(d, "ddi")
         dd = d["ddi"]

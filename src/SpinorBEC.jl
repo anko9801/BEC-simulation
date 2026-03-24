@@ -25,7 +25,10 @@ include("optical_trap.jl")
 include("optics.jl")
 include("laser_potential.jl")
 include("thomas_fermi.jl")
+include("fft_utils.jl")
 include("observables.jl")
+include("diagnostics.jl")
+include("majorana.jl")
 include("simulation.jl")
 include("io.jl")
 include("experiment.jl")
@@ -91,6 +94,16 @@ export split_step!, prepare_kinetic_phase
 export total_density, component_density, magnetization
 export spin_density_vector, total_norm, total_energy
 export probability_current, orbital_angular_momentum
+export superfluid_velocity, total_angular_momentum, spin_texture_charge
+export superfluid_vorticity, berry_curvature
+export majorana_stars, icosahedral_order_parameter
+export get_cn
+
+# Diagnostics
+export spin_mixing_period, spin_mixing_period_si, quadratic_zeeman_from_field
+export healing_length_contact, healing_length_spin, healing_length_ddi
+export thomas_fermi_radius, thomas_fermi_radius_harmonic
+export phase_diagram_point, component_populations
 
 # Simulation
 export find_ground_state, run_simulation!, make_workspace, init_psi

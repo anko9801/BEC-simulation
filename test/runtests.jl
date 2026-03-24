@@ -11,6 +11,7 @@ using SpinorBEC
     include("test_simulation.jl")
     include("test_3d.jl")
     include("test_ddi.jl")
+    include("test_potentials.jl")
     include("test_experiment.jl")
     include("test_physics_level0.jl")
     include("test_physics_level1.jl")
@@ -23,4 +24,8 @@ using SpinorBEC
     include("test_adaptive_dt.jl")
     include("test_unitful.jl")
     include("test_angular_momentum.jl")
+    include("test_texture_observables.jl")
+    include("test_vorticity_berry.jl")
+    include("test_majorana.jl")
+    include("test_diagnostics.jl")
 end

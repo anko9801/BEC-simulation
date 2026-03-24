@@ -75,6 +75,17 @@ AtomSpecies(name, mass, F, a0, a2) = AtomSpecies(name, mass, F, a0, a2, 0.0)
 struct InteractionParams
     c0::Float64
     c1::Float64
+    c_extra::Vector{Float64}
+
+    InteractionParams(c0::Float64, c1::Float64) = new(c0, c1, Float64[])
+    InteractionParams(c0::Float64, c1::Float64, c_extra::Vector{Float64}) = new(c0, c1, c_extra)
+end
+
+function get_cn(ip::InteractionParams, n::Int)
+    n == 0 && return ip.c0
+    n == 1 && return ip.c1
+    idx = n - 1
+    idx <= length(ip.c_extra) ? ip.c_extra[idx] : 0.0
 end
 
 # --- Zeeman Parameters ---
