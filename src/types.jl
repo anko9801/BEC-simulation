@@ -210,6 +210,24 @@ end
 
 LossParams(gamma_dr::Float64) = LossParams(gamma_dr, 0.0)
 
+# --- Adaptive Time Stepping ---
+
+struct AdaptiveDtParams
+    dt_init::Float64
+    dt_min::Float64
+    dt_max::Float64
+    tol::Float64
+
+    function AdaptiveDtParams(; dt_init::Float64=0.001, dt_min::Float64=1e-5,
+                               dt_max::Float64=0.01, tol::Float64=1e-3)
+        dt_init > 0 || throw(ArgumentError("dt_init must be positive"))
+        dt_min > 0 || throw(ArgumentError("dt_min must be positive"))
+        dt_max >= dt_min || throw(ArgumentError("dt_max must be >= dt_min"))
+        tol > 0 || throw(ArgumentError("tol must be positive"))
+        new(dt_init, dt_min, dt_max, tol)
+    end
+end
+
 # --- Workspace ---
 
 struct Workspace{N,A,P,IP}

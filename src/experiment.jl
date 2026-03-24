@@ -28,6 +28,7 @@ struct PhaseConfig
     zeeman_q::RampOrConstant
     potential::Union{Nothing,PotentialConfig}
     noise_amplitude::Union{Nothing,Float64}
+    adaptive_dt::Union{Nothing,AdaptiveDtParams}
 end
 
 struct GroundStateConfig
@@ -174,7 +175,19 @@ function _parse_phase(d::Dict)
         v === nothing ? nothing : Float64(v)
     end
 
-    PhaseConfig(name, duration, dt, save_every, zeeman_p, zeeman_q, pot, noise_amp)
+    adaptive = if haskey(d, "adaptive_dt")
+        ad = d["adaptive_dt"]
+        AdaptiveDtParams(;
+            dt_init=Float64(get(ad, "dt_init", dt)),
+            dt_min=Float64(get(ad, "dt_min", 1e-5)),
+            dt_max=Float64(get(ad, "dt_max", 10 * dt)),
+            tol=Float64(get(ad, "tol", 1e-3)),
+        )
+    else
+        nothing
+    end
+
+    PhaseConfig(name, duration, dt, save_every, zeeman_p, zeeman_q, pot, noise_amp, adaptive)
 end
 
 function _parse_ramp_or_constant(v)::RampOrConstant

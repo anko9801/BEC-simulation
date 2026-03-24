@@ -39,7 +39,7 @@ include("unitful_support.jl")
 # Types
 export GridConfig, Grid, SpinSystem, SpinMatrices
 export AtomSpecies, InteractionParams, ZeemanParams, LossParams
-export SimParams, SimState, FFTPlans, Workspace
+export SimParams, SimState, FFTPlans, Workspace, AdaptiveDtParams
 export HarmonicTrap, NoPotential, GravityPotential, CompositePotential
 
 # Grid
@@ -110,7 +110,7 @@ export thomas_fermi_radius, thomas_fermi_radius_harmonic
 export phase_diagram_point, component_populations
 
 # Simulation
-export find_ground_state, run_simulation!, make_workspace, init_psi
+export find_ground_state, run_simulation!, run_simulation_adaptive!, make_workspace, init_psi
 
 # I/O
 export save_state, load_state

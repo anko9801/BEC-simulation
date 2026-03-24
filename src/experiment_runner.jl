@@ -126,15 +126,26 @@ function run_experiment(config::ExperimentConfig; verbose::Bool=true)
             _add_noise!(ws.state.psi, phase.noise_amplitude, 2 * atom.F + 1, ndim, grid)
         end
 
-        result = run_simulation!(ws)
+        sim_result = if phase.adaptive_dt !== nothing
+            save_interval = phase.dt * phase.save_every
+            out = run_simulation_adaptive!(ws;
+                adaptive=phase.adaptive_dt,
+                t_end=t_offset + phase.duration,
+                save_interval,
+            )
+            verbose && println("  adaptive: $(out.n_accepted) accepted, $(out.n_rejected) rejected, final_dt=$(round(out.final_dt, sigdigits=3))")
+            out.result
+        else
+            run_simulation!(ws)
+        end
 
         psi_current = copy(ws.state.psi)
         t_offset += phase.duration
 
-        push!(phase_results, result)
+        push!(phase_results, sim_result)
         push!(phase_names, phase.name)
 
-        verbose && println("  final t=$(ws.state.t), E=$(result.energies[end])")
+        verbose && println("  final t=$(ws.state.t), E=$(sim_result.energies[end])")
     end
 
     ExperimentResult(config, gs_energy, gs_converged, phase_results, phase_names)
