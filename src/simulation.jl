@@ -393,6 +393,13 @@ function _adaptive_split_step!(ws::Workspace{N}, dt::Float64, n_comp::Int, ndim:
     nothing
 end
 
+function _quantize_dt(dt, dt_min, dt_max)
+    dt <= dt_min && return dt_min
+    dt >= dt_max && return dt_max
+    k = floor(Int, log2(dt / dt_min))
+    clamp(dt_min * exp2(k), dt_min, dt_max)
+end
+
 function run_simulation_adaptive!(ws::Workspace{N};
     adaptive::AdaptiveDtParams=AdaptiveDtParams(),
     t_end::Float64,
@@ -402,7 +409,7 @@ function run_simulation_adaptive!(ws::Workspace{N};
     n_comp = ws.spin_matrices.system.n_components
     sys = ws.spin_matrices.system
 
-    dt = clamp(adaptive.dt_init, adaptive.dt_min, adaptive.dt_max)
+    dt = _quantize_dt(adaptive.dt_init, adaptive.dt_min, adaptive.dt_max)
     current_kinetic_dt = NaN
 
     times = Float64[ws.state.t]
@@ -442,7 +449,7 @@ function run_simulation_adaptive!(ws::Workspace{N};
             ws.state.t = t_before
             ws.state.step = step_before
             factor = max(0.5, 0.9 * sqrt(adaptive.tol / rel_change))
-            dt = max(dt_step * factor, adaptive.dt_min)
+            dt = _quantize_dt(dt_step * factor, adaptive.dt_min, adaptive.dt_max)
             current_kinetic_dt = NaN
             n_rejected += 1
             continue
@@ -452,7 +459,7 @@ function run_simulation_adaptive!(ws::Workspace{N};
 
         if dt_step >= dt * 0.99
             factor = rel_change > 1e-300 ? min(2.0, 0.9 * sqrt(adaptive.tol / rel_change)) : 2.0
-            dt = clamp(dt * factor, adaptive.dt_min, adaptive.dt_max)
+            dt = _quantize_dt(dt * factor, adaptive.dt_min, adaptive.dt_max)
         end
 
         if ws.state.t >= next_save - 1e-14
