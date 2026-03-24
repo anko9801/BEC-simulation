@@ -96,6 +96,23 @@ struct SimulationResult
     psi_snapshots::Vector{Array{ComplexF64}}
 end
 
+const _ITP_EXPONENT_LIMIT = 50.0
+
+function _validate_itp_zeeman(zeeman::ZeemanParams, F, dt)
+    sys = SpinSystem(F)
+    max_zee = maximum(abs, zeeman_energies(zeeman, sys))
+    max_exponent = max_zee * dt / 4
+    if max_exponent > _ITP_EXPONENT_LIMIT
+        throw(ArgumentError(
+            "Zeeman p=$(zeeman.p) with F=$F and dt=$dt causes overflow in imaginary time " *
+            "(exponent=$(round(max_exponent, digits=1)) > $_ITP_EXPONENT_LIMIT). " *
+            "Reduce p or dt. For ferromagnetic ground state, p=10 suffices."
+        ))
+    end
+end
+
+_validate_itp_zeeman(::TimeDependentZeeman, F, dt) = nothing
+
 function find_ground_state(;
     grid,
     atom,
@@ -118,6 +135,8 @@ function find_ground_state(;
     else
         copy(psi_init)
     end
+
+    _validate_itp_zeeman(zeeman, atom.F, dt)
 
     if adaptive_dt
         return _find_ground_state_adaptive(;
