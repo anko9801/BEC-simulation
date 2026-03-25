@@ -1,95 +1,44 @@
-using SpinorBEC
-using JLD2
+include(joinpath(@__DIR__, "eu151_setup.jl"))
+include(joinpath(@__DIR__, "json_utils.jl"))
 
 println("=== Eu151 EdH Stern-Gerlach Simulation (3D) ===")
 println("    Matsui et al., Science 391, 384-388 (2026)")
-
-# =================================================================
-# Physical parameters (Matsui et al.)
-# =================================================================
-
-const ω_ref    = 2π * 110.0         # reference trap freq [rad/s]
-const ω_z_hz   = 130.0              # axial trap freq [Hz]
-const λ_z      = ω_z_hz / 110.0     # ω_z / ω_ref ≈ 1.182
-const N_atoms  = 50_000
-const m_Eu     = Eu151.mass
-const a_ho     = sqrt(Units.HBAR / (m_Eu * ω_ref))
-const t_unit   = 1.0 / ω_ref        # ≈ 1.447 ms
-
-# Dimensionless parameters (3D)
-const a_s_dl = Eu151.a0 / a_ho
-const c0     = 4π * a_s_dl * N_atoms          # ≈ 4689
-const c1     = 0.0                               # Eu151: a_F unknown, DDI dominates
-const c_dd_SI       = compute_c_dd(Eu151)
-const c_dd_per_atom = c_dd_SI / (Units.HBAR * ω_ref * a_ho^3)
-const c_dd          = N_atoms * c_dd_per_atom   # ≈ 609
-
-# Weak magnetic field: B = 2.6 nT
-const g_F    = 7.0 / 6.0
-const B_weak = 2.6e-9
-const p_weak = g_F * Units.MU_BOHR * B_weak / (Units.HBAR * ω_ref)  # ≈ 0.39
-
-println("c0=$(round(c0; digits=1)), c1=$(round(c1; digits=1)), c_dd=$(round(c_dd; digits=1))")
-println("p_weak=$(round(p_weak; digits=3)) (B=2.6 nT)")
-println("a_ho=$(round(a_ho*1e6; digits=3)) μm, 1ms=$(round(1e-3/t_unit; digits=3)) ω⁻¹")
+println("c0=$(round(EU_c0; digits=1)), c_dd=$(round(EU_c_dd; digits=1))")
+println("p_weak=$(round(EU_p_weak; digits=3)) (B=2.6 nT)")
+println("a_ho=$(round(EU_a_ho*1e6; digits=3)) μm, 1ms=$(round(1e-3/EU_t_unit; digits=3)) ω⁻¹")
 
 # --- Setup ---
-atom = AtomSpecies("Eu151", 1.0, 6, a_s_dl, 0.0)
+const c1 = 0.0  # Eu151: a_F unknown, DDI dominates
+atom = AtomSpecies("Eu151", 1.0, 6, EU_a_s_dl, 0.0)
 grid = make_grid(GridConfig((32, 32, 32), (20.0, 20.0, 20.0)))
-interactions = InteractionParams(c0, c1)
-trap = HarmonicTrap((1.0, 1.0, λ_z))
+interactions = InteractionParams(EU_c0, c1)
+trap = HarmonicTrap((1.0, 1.0, EU_λ_z))
 sys = SpinSystem(atom.F)
 n_comp = sys.n_components
 n_pts = grid.config.n_points
 ndim = 3
 
-# --- Ground state: ferromagnetic (m=+6) ---
-gs_cache = joinpath(@__DIR__, "cache_eu151_gs_3d.jld2")
-psi_gs = if isfile(gs_cache)
-    println("Loading cached ground state...")
-    load(gs_cache, "psi")
-else
-    println("Finding ground state (first run, will cache)...")
-    # c1=0 for ITP: at p=100 Zeeman dominates, spin mixing wastes D=13 eigendecomps
-    gs = find_ground_state(;
-        grid, atom, interactions=InteractionParams(c0, 0.0),
-        zeeman=ZeemanParams(100.0, 0.0),
-        potential=trap,
-        dt=0.005, n_steps=20000, tol=1e-9,
-        initial_state=:ferromagnetic,
-        enable_ddi=false,
-    )
-    println("  converged=$(gs.converged), E=$(gs.energy)")
-    psi_out = copy(gs.workspace.state.psi)
-    jldsave(gs_cache; psi=psi_out)
-    println("  cached to $gs_cache")
-    psi_out
-end
-
-# --- Seed quantum fluctuations ---
-noise_amp = 0.001
-println("Seeding spin fluctuations (noise=$noise_amp, skip dominant)...")
-psi_seeded = copy(psi_gs)
-SpinorBEC._add_noise!(psi_seeded, noise_amp, n_comp, ndim, grid)
+# --- Ground state + noise ---
+psi_gs = load_or_compute_gs(grid; trap)
+psi_seeded = seed_noise(psi_gs, n_comp, ndim, grid)
 
 # --- Spin relaxation at weak field (adaptive dt) ---
-# Paper: up to 40 ms observation time
-t_total_ms = 40.0
-t_end = t_total_ms * 1e-3 / t_unit
+t_total_ms = 2.0
+t_end = t_total_ms * 1e-3 / EU_t_unit
 println("Spin relaxation: t_end=$(round(t_end; digits=1)) ω⁻¹ ($(t_total_ms) ms)")
-println("  p=$( round(p_weak; digits=3)) (B=2.6 nT, NOT zero field)")
+println("  p=$( round(EU_p_weak; digits=3)) (B=2.6 nT, NOT zero field)")
 
 t_relax = time()
 sp_relax = SimParams(; dt=0.001, n_steps=1)
 ws_relax = make_workspace(;
     grid, atom, interactions,
-    zeeman=ZeemanParams(p_weak, 0.0),
+    zeeman=ZeemanParams(EU_p_weak, 0.0),
     potential=trap,
     sim_params=sp_relax,
     psi_init=psi_seeded,
-    enable_ddi=true, c_dd,
+    enable_ddi=true, c_dd=EU_c_dd,
 )
-adaptive = AdaptiveDtParams(dt_init=0.005, dt_min=0.0001, dt_max=0.01, tol=0.005)
+adaptive = AdaptiveDtParams(dt_init=0.002, dt_min=0.0001, dt_max=0.005, tol=0.001)
 t_start_wall = time()
 progress_cb = function(ws, step)
     elapsed = time() - t_start_wall
@@ -106,13 +55,13 @@ progress_cb = function(ws, step)
     Mz = magnetization(ws.state.psi, ws.grid, sys)
     Jz = Lz + Mz
 
-    t_ms = round(ws.state.t * t_unit * 1e3, digits=2)
+    t_ms = round(ws.state.t * EU_t_unit * 1e3, digits=2)
     println("  [$(round(elapsed, digits=1))s] t=$(t_ms)ms step=$(step) " *
             "m6=$(round(pops[1], digits=4)) " *
             "Lz=$(round(Lz, digits=3)) Mz=$(round(Mz, digits=3)) Jz=$(round(Jz, digits=3))")
     flush(stdout)
 end
-out = run_simulation_adaptive!(ws_relax; adaptive, t_end, save_interval=t_end/20, callback=progress_cb)
+out = run_simulation_adaptive!(ws_relax; adaptive, t_end, save_interval=0.25, callback=progress_cb)
 result_relax = out.result
 println("  done, t=$(ws_relax.state.t), elapsed=$(round(time()-t_relax, digits=1))s")
 println("  accepted=$(out.n_accepted), rejected=$(out.n_rejected), final_dt=$(round(out.final_dt, sigdigits=3))")
@@ -120,7 +69,7 @@ println("  accepted=$(out.n_accepted), rejected=$(out.n_rejected), final_dt=$(ro
 # --- Extract data for visualization ---
 println("Extracting visualization data...")
 
-a_ho_um = round(a_ho * 1e6; digits=3)
+a_ho_um = round(EU_a_ho * 1e6; digits=3)
 x_um = collect(grid.x[1]) .* a_ho_um
 y_um = collect(grid.x[2]) .* a_ho_um
 dz = grid.dx[3]
@@ -129,8 +78,8 @@ m_values = collect(sys.m_values)
 all_snapshots = result_relax.psi_snapshots
 times = result_relax.times
 
-n_snaps = min(10, length(all_snapshots))
-indices = round.(Int, range(1, length(all_snapshots), length=n_snaps))
+n_snaps = length(all_snapshots)
+indices = 1:n_snaps
 
 snapshots_data = []
 for idx in indices
@@ -153,7 +102,7 @@ for idx in indices
 
     push!(snapshots_data, Dict(
         "t" => round(t, digits=4),
-        "t_ms" => round(t * t_unit * 1e3, digits=2),
+        "t_ms" => round(t * EU_t_unit * 1e3, digits=2),
         "populations" => round.(pops, digits=6),
         "densities" => [round.(d, digits=8) for d in densities],
     ))
@@ -167,7 +116,7 @@ plans_diag = make_fft_plans(n_pts)
 for (idx_i, idx) in enumerate(indices)
     psi_snap = all_snapshots[idx]
     t = times[idx]
-    t_ms = round(t * t_unit * 1e3, digits=2)
+    t_ms = round(t * EU_t_unit * 1e3, digits=2)
 
     Lz = orbital_angular_momentum(psi_snap, grid, plans_diag)
     Mz = magnetization(psi_snap, grid, sys)
@@ -177,30 +126,8 @@ for (idx_i, idx) in enumerate(indices)
     println("  $(lpad(t_ms, 6)) | $(lpad(round(Lz, digits=3), 7)) | $(lpad(round(Mz, digits=3), 7)) | $(lpad(round(Jz, digits=3), 7)) | $(round(p[1], digits=4)) | $(round(p[2], digits=4))")
 end
 
-# --- Manual JSON serialization ---
+# --- Generate HTML ---
 println("Generating HTML...")
-
-function _to_json(v::Number)
-    isnan(v) ? "null" : isinteger(v) ? string(Int(v)) : string(v)
-end
-function _to_json(v::AbstractVector)
-    "[" * join((_to_json(x) for x in v), ",") * "]"
-end
-function _to_json(v::AbstractMatrix)
-    "[" * join((_to_json(v[i,:]) for i in axes(v,1)), ",") * "]"
-end
-function _to_json(v::String)
-    "\"" * v * "\""
-end
-function _to_json(d::Dict)
-    "{" * join(("\"$(k)\":" * _to_json(v) for (k,v) in d), ",") * "}"
-end
-function _to_json(v::AbstractVector{<:Dict})
-    "[" * join((_to_json(d) for d in v), ",") * "]"
-end
-function _to_json(v::AbstractVector{<:AbstractArray})
-    "[" * join((_to_json(x) for x in v), ",") * "]"
-end
 
 json_str = _to_json(Dict(
     "x" => round.(x_um, digits=3),

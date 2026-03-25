@@ -4,87 +4,36 @@ Reproduction of spin texture formation in Eu151 spinor dipolar BEC.
 Reference: Matsui et al., Science 391, 384-388 (2026)
            arXiv:2504.17357
 
-Experimental parameters:
-  Trap: (ωx, ωy, ωz)/(2π) = (110, 110, 130) Hz — nearly spherical 3D
-  N = 5×10⁴ atoms
-  c₁/c₀ = 1/36 (antiferromagnetic spin-exchange)
-  B_weak = 2.6 nT (dimensionless p ≈ 0.39)
-  g_F = 7/6  (μ = 7μ_B, F = 6)
-  SG measurement: 42 mT/m gradient, 6 ms pulse, 16 ms free fall
-  Observation up to 40 ms hold time
-  38% atom loss over 40 ms at B = 2.6 nT
-
 Two scenarios:
   (I)  Einstein-de Haas dynamics — quench to B_weak, DDI drives spin relaxation
   (II) Flower phase ground state — imaginary-time at B ≈ 0
-
-Dimensionless units: ℏ = m = ω_ref = 1, where ω_ref = ωx = 2π × 110 Hz
-  length  → a_ho = √(ℏ/(m ω_ref)) ≈ 0.780 μm
-  energy  → ℏ ω_ref
-  time    → 1/ω_ref ≈ 1.447 ms
 """
 
-using SpinorBEC
+include(joinpath(@__DIR__, "eu151_setup.jl"))
 using SpinorBEC: _component_slice
 using LinearAlgebra
-using JLD2
 
-# =================================================================
-# Physical parameters (Matsui et al., Science 2026)
-# =================================================================
+const c1 = EU_c0 / 36  # antiferromagnetic (Matsui: c₁/c₀ = 1/36)
 
-const ω_ref    = 2π * 110.0         # reference trap frequency [rad/s]
-const ω_z_hz   = 130.0              # axial trap frequency [Hz]
-const λ_z      = ω_z_hz / 110.0     # ω_z / ω_ref = 130/110 ≈ 1.182
-const N_atoms  = 50_000
-
-const m_Eu  = Eu151.mass
-const a_ho  = sqrt(Units.HBAR / (m_Eu * ω_ref))
-const t_unit = 1.0 / ω_ref
-
-println("a_ho    = $(round(a_ho * 1e6; digits=3)) μm")
-println("t_unit  = $(round(t_unit * 1e3; digits=3)) ms")
-println("1 ms    = $(round(1e-3 / t_unit; digits=3)) ω⁻¹")
-println("ω_z/ω_⊥ = $(round(λ_z; digits=3))")
-
-# =================================================================
-# Dimensionless parameters (3D)
-# =================================================================
-
-const a_s_dl = Eu151.a0 / a_ho
-const c0     = 4π * a_s_dl * N_atoms
-const c1     = c0 / 36                    # antiferromagnetic (Matsui: c₁/c₀ = 1/36)
-
-const c_dd_SI       = compute_c_dd(Eu151)
-const c_dd_per_atom = c_dd_SI / (Units.HBAR * ω_ref * a_ho^3)
-const c_dd          = N_atoms * c_dd_per_atom
-
-const ε_dd = compute_a_dd(Eu151) / Eu151.a0
-
-const g_F    = 7.0 / 6.0
-const B_weak = 2.6e-9   # T
-const p_weak = g_F * Units.MU_BOHR * B_weak / (Units.HBAR * ω_ref)
-
-println("\nε_dd    = $(round(ε_dd; digits=3))")
-println("c0      = $(round(c0; digits=1))  (3D)")
+println("a_ho    = $(round(EU_a_ho * 1e6; digits=3)) μm")
+println("t_unit  = $(round(EU_t_unit * 1e3; digits=3)) ms")
+println("ε_dd    = $(round(EU_ε_dd; digits=3))")
+println("c0      = $(round(EU_c0; digits=1))  (3D)")
 println("c1      = $(round(c1; digits=1))  (3D, c0/36)")
-println("c_dd    = $(round(c_dd; digits=1))  (3D)")
-println("c1/c0   = 1/$(round(Int, c0/c1))")
-println("p_weak  = $(round(p_weak; digits=3))  (B = 2.6 nT)")
+println("c_dd    = $(round(EU_c_dd; digits=1))  (3D)")
+println("p_weak  = $(round(EU_p_weak; digits=3))  (B = 2.6 nT)")
 
 # =================================================================
 # Grid & atom
 # =================================================================
 
 const N_GRID = 32
-const L_BOX  = 20.0     # [a_ho]
+const L_BOX  = 20.0
 
 grid = make_grid(GridConfig((N_GRID, N_GRID, N_GRID), (L_BOX, L_BOX, L_BOX)))
-
-atom = AtomSpecies("Eu151", 1.0, 6, a_s_dl, 0.0)
-
-interactions = InteractionParams(c0, c1)
-trap = HarmonicTrap((1.0, 1.0, λ_z))
+atom = AtomSpecies("Eu151", 1.0, 6, EU_a_s_dl, 0.0)
+interactions = InteractionParams(EU_c0, c1)
+trap = HarmonicTrap((1.0, 1.0, EU_λ_z))
 
 # =================================================================
 # Helper: flower-ansatz initial state (3D)
@@ -135,37 +84,13 @@ function run_edh(; dt=0.001, t_total_ms=40.0, n_save=100)
     println("  (I) Einstein-de Haas dynamics (3D)")
     println("="^60)
 
-    t_total = t_total_ms * 1e-3 / t_unit
+    t_total = t_total_ms * 1e-3 / EU_t_unit
     println("  Target: $(t_total_ms) ms = $(round(t_total; digits=1)) ω⁻¹")
 
     sys = SpinSystem(6)
 
-    # Ground state at high field (ferromagnetic)
-    gs_cache = joinpath(@__DIR__, "cache_eu151_gs_3d.jld2")
-    psi_gs = if isfile(gs_cache)
-        println("  Loading cached ground state...")
-        load(gs_cache, "psi")
-    else
-        println("  Finding ground state (ITP, no DDI)...")
-        # c1=0 for ITP: at p=100 Zeeman dominates, spin mixing wastes D=13 eigendecomps
-        gs = find_ground_state(;
-            grid, atom, interactions=InteractionParams(c0, 0.0),
-            zeeman=ZeemanParams(100.0, 0.0),
-            potential=trap,
-            dt=0.005, n_steps=20000, tol=1e-9,
-            initial_state=:ferromagnetic,
-            enable_ddi=false,
-        )
-        println("  converged=$(gs.converged), E=$(gs.energy)")
-        psi_out = copy(gs.workspace.state.psi)
-        jldsave(gs_cache; psi=psi_out)
-        println("  cached → $gs_cache")
-        psi_out
-    end
-
-    # Seed quantum fluctuations
-    psi0 = copy(psi_gs)
-    SpinorBEC._add_noise!(psi0, 0.001, sys.n_components, 3, grid)
+    psi_gs = load_or_compute_gs(grid; trap)
+    psi0 = seed_noise(psi_gs, sys.n_components, 3, grid)
 
     n_steps = round(Int, t_total / dt)
     save_every = max(1, n_steps ÷ n_save)
@@ -174,21 +99,21 @@ function run_edh(; dt=0.001, t_total_ms=40.0, n_save=100)
     ws = make_workspace(;
         grid, atom, interactions,
         potential=trap,
-        zeeman=ZeemanParams(p_weak, 0.0),
+        zeeman=ZeemanParams(EU_p_weak, 0.0),
         sim_params=sp,
         psi_init=psi0,
         enable_ddi=true,
-        c_dd,
+        c_dd=EU_c_dd,
     )
 
-    println("  Running $(n_steps) steps (dt=$dt, p=$(round(p_weak; digits=3)))...")
+    println("  Running $(n_steps) steps (dt=$dt, p=$(round(EU_p_weak; digits=3)))...")
     sm = ws.spin_matrices
 
     result = run_simulation!(ws;
         callback=(ws, step) -> begin
             if step % max(1, n_steps ÷ 10) == 0
                 Mz = magnetization(ws.state.psi, ws.grid, sm.system)
-                t_ms = round(ws.state.t * t_unit * 1e3; digits=1)
+                t_ms = round(ws.state.t * EU_t_unit * 1e3; digits=1)
                 println("  t=$(t_ms) ms  Mz=$(round(Mz; digits=3))")
             end
         end,
@@ -236,7 +161,7 @@ function run_flower_ground_state(; dt=0.001, n_steps=50_000, tol=1e-10)
         sim_params=sp,
         psi_init=psi0,
         enable_ddi=true,
-        c_dd,
+        c_dd=EU_c_dd,
     )
 
     println("  Running imaginary-time evolution ($n_steps steps, dt=$dt)...")

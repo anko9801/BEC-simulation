@@ -1,33 +1,14 @@
-using SpinorBEC
-using JLD2
+include(joinpath(@__DIR__, "eu151_setup.jl"))
 using Printf
 
 println("=== Adaptive dt convergence test for Eu151 3D ===")
 
-# Same physical setup as stern_gerlach_3d.jl
-const ω_ref    = 2π * 110.0
-const ω_z_hz   = 130.0
-const λ_z      = ω_z_hz / 110.0
-const N_atoms  = 50_000
-const m_Eu     = Eu151.mass
-const a_ho     = sqrt(Units.HBAR / (m_Eu * ω_ref))
-const t_unit   = 1.0 / ω_ref
+const c1 = EU_c0 / 36
 
-const a_s_dl = Eu151.a0 / a_ho
-const c0     = 4π * a_s_dl * N_atoms
-const c1     = c0 / 36
-const c_dd_SI       = compute_c_dd(Eu151)
-const c_dd_per_atom = c_dd_SI / (Units.HBAR * ω_ref * a_ho^3)
-const c_dd          = N_atoms * c_dd_per_atom
-
-const g_F    = 7.0 / 6.0
-const B_weak = 2.6e-9
-const p_weak = g_F * Units.MU_BOHR * B_weak / (Units.HBAR * ω_ref)
-
-atom = AtomSpecies("Eu151", 1.0, 6, a_s_dl, 0.0)
+atom = AtomSpecies("Eu151", 1.0, 6, EU_a_s_dl, 0.0)
 grid = make_grid(GridConfig((32, 32, 32), (20.0, 20.0, 20.0)))
-interactions = InteractionParams(c0, c1)
-trap = HarmonicTrap((1.0, 1.0, λ_z))
+interactions = InteractionParams(EU_c0, c1)
+trap = HarmonicTrap((1.0, 1.0, EU_λ_z))
 sys = SpinSystem(atom.F)
 n_comp = sys.n_components
 n_pts = grid.config.n_points
@@ -36,25 +17,22 @@ ndim = 3
 # --- CFL analysis ---
 println("\n--- CFL Analysis ---")
 
-gs_cache = joinpath(@__DIR__, "cache_eu151_gs_3d.jld2")
-psi_gs = load(gs_cache, "psi")
+psi_gs = load(joinpath(@__DIR__, "cache_eu151_gs_3d.jld2"), "psi")
 
 # Energy scales
 dV = cell_volume(grid)
 n_peak = maximum(sum(abs2.(psi_gs[:,:,:,c]) for c in 1:n_comp))
 println("Peak density n_peak = $(round(n_peak, sigdigits=4))")
 
-μ_contact = c0 * n_peak
-μ_ddi     = c_dd * n_peak
+μ_contact = EU_c0 * n_peak
+μ_ddi     = EU_c_dd * n_peak
 μ_spin    = c1 * n_peak
-E_zeeman  = p_weak * 6.0  # p × F
+E_zeeman  = EU_p_weak * 6.0
 
-# Healing length and kinetic scale
 ξ = 1.0 / sqrt(2 * μ_contact)
 k_heal = 1.0 / ξ
-E_kin_heal = k_heal^2 / 2  # kinetic energy at healing length
+E_kin_heal = k_heal^2 / 2
 
-# Grid resolution
 Δx = grid.dx[1]
 k_max = π / Δx
 E_kin_max = k_max^2 / 2
@@ -68,17 +46,8 @@ println("E_kin at ξ = $(round(E_kin_heal, sigdigits=4))")
 println("E_kin_max (grid) = $(round(E_kin_max, sigdigits=4))")
 println("Δx = $(round(Δx, sigdigits=4)), k_max = $(round(k_max, sigdigits=4))")
 
-# Strang splitting error per step: ε ~ (dt³/12) × [T,[T,V]] + (dt³/24) × [V,[V,T]]
-# Dominant commutator scale: ||[T,V]|| ~ E_kin_heal × μ_contact
-# For condensate, the effective commutator uses healing-length scales, not k_max
 commutator_scale = E_kin_heal * μ_contact
 println("\n||[T,V]|| estimate = $(round(commutator_scale, sigdigits=4))")
-
-# CFL condition: dt × sqrt(commutator_scale) < safety_factor
-# For 2nd order Strang: local error ~ dt³ × commutator_scale
-# Want accumulated error < ε_target over T_total:
-# (T/dt) × dt³ × comm = T × dt² × comm < ε_target
-# dt < sqrt(ε_target / (T × comm))
 
 T_total = 27.6  # ω⁻¹
 for ε_target in [0.01, 0.001, 0.0001]
@@ -90,10 +59,9 @@ end
 # --- Convergence test: run 2ms at multiple tolerances ---
 println("\n--- Convergence test (t=0 to 2ms) ---")
 
-t_test = 2.0e-3 / t_unit  # 2ms in ω⁻¹ units
+t_test = 2.0e-3 / EU_t_unit
 println("t_test = $(round(t_test, digits=3)) ω⁻¹")
 
-# Also test with fixed dt for reference
 test_configs = [
     ("fixed dt=0.001",  nothing, 0.001),
     ("fixed dt=0.0005", nothing, 0.0005),
@@ -106,17 +74,16 @@ test_configs = [
 results = []
 
 for (label, tol, fixed_dt) in test_configs
-    psi_seeded = copy(psi_gs)
-    SpinorBEC._add_noise!(psi_seeded, 0.001, n_comp, ndim, grid)
+    psi_seeded = seed_noise(psi_gs, n_comp, ndim, grid)
 
     sp = SimParams(; dt=0.001, n_steps=1)
     ws = make_workspace(;
         grid, atom, interactions,
-        zeeman=ZeemanParams(p_weak, 0.0),
+        zeeman=ZeemanParams(EU_p_weak, 0.0),
         potential=trap,
         sim_params=sp,
         psi_init=psi_seeded,
-        enable_ddi=true, c_dd,
+        enable_ddi=true, c_dd=EU_c_dd,
     )
 
     t_start = time()
@@ -131,11 +98,11 @@ for (label, tol, fixed_dt) in test_configs
         sp2 = SimParams(; dt=fixed_dt, n_steps=n_fixed, save_every=n_fixed)
         ws2 = make_workspace(;
             grid, atom, interactions,
-            zeeman=ZeemanParams(p_weak, 0.0),
+            zeeman=ZeemanParams(EU_p_weak, 0.0),
             potential=trap,
             sim_params=sp2,
             psi_init=psi_seeded,
-            enable_ddi=true, c_dd,
+            enable_ddi=true, c_dd=EU_c_dd,
         )
         run_simulation!(ws2)
         ws = ws2
@@ -145,7 +112,6 @@ for (label, tol, fixed_dt) in test_configs
 
     elapsed = time() - t_start
 
-    # Population at 2ms
     pops = Float64[]
     for c in 1:n_comp
         slice = SpinorBEC._component_slice(ndim, n_pts, c)
@@ -154,7 +120,6 @@ for (label, tol, fixed_dt) in test_configs
     total = sum(pops)
     if total > 0; pops ./= total; end
 
-    # Energy and norm
     E = total_energy(ws)
     nrm = total_norm(ws.state.psi, grid)
 
@@ -176,7 +141,6 @@ for r in results
             r.label, r.pops[1], r.pops[2], r.E, r.n_steps, r.elapsed)
 end
 
-# Reference: finest fixed dt
 ref = results[2]  # dt=0.0005
 println("\nReference: $(ref.label)")
 println("Max population difference from reference:")

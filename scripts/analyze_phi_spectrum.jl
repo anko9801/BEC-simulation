@@ -1,38 +1,24 @@
-using SpinorBEC
-using JLD2, Random
+include(joinpath(@__DIR__, "eu151_setup.jl"))
 
 println("=== φ-spectrum analysis of Eu151 EdH dynamics ===\n")
 
-# Parameters (same as stern_gerlach_3d.jl)
-const ω_ref = 2π * 110.0
-const m_Eu = Eu151.mass
-const a_ho = sqrt(Units.HBAR / (m_Eu * ω_ref))
-const t_unit = 1.0 / ω_ref
-const a_s_dl = Eu151.a0 / a_ho
-const c0 = 4π * a_s_dl * 50_000
-const c_dd_val = 50_000 * compute_c_dd(Eu151) / (Units.HBAR * ω_ref * a_ho^3)
-const λ_z = 130.0 / 110.0
-const p_weak = (7.0 / 6.0) * Units.MU_BOHR * 2.6e-9 / (Units.HBAR * ω_ref)
-
 N_GRID = parse(Int, get(ENV, "PHI_GRID", "32"))
 grid = make_grid(GridConfig((N_GRID, N_GRID, N_GRID), (20.0, 20.0, 20.0)))
-atom = AtomSpecies("Eu151", 1.0, 6, a_s_dl, 0.0)
+atom = AtomSpecies("Eu151", 1.0, 6, EU_a_s_dl, 0.0)
 sys = SpinSystem(atom.F)
 n_comp = sys.n_components
 dV = cell_volume(grid)
 
 # Load GS and seed noise
 psi_gs = load(joinpath(@__DIR__, "cache_eu151_gs_3d_$(N_GRID).jld2"), "psi")
-psi = copy(psi_gs)
-Random.seed!(42)
-SpinorBEC._add_noise!(psi, 0.001, n_comp, 3, grid)
+psi = seed_noise(psi_gs, n_comp, 3, grid)
 
 # Run 2ms with snapshots every 0.25 ω⁻¹
-t_end = 2e-3 / t_unit
+t_end = 2e-3 / EU_t_unit
 sp = SimParams(; dt=0.001, n_steps=1)
-ws = make_workspace(; grid, atom, interactions=InteractionParams(c0, 0.0),
-    zeeman=ZeemanParams(p_weak, 0.0), potential=HarmonicTrap((1.0, 1.0, λ_z)),
-    sim_params=sp, psi_init=psi, enable_ddi=true, c_dd=c_dd_val)
+ws = make_workspace(; grid, atom, interactions=InteractionParams(EU_c0, 0.0),
+    zeeman=ZeemanParams(EU_p_weak, 0.0), potential=HarmonicTrap((1.0, 1.0, EU_λ_z)),
+    sim_params=sp, psi_init=psi, enable_ddi=true, c_dd=EU_c_dd)
 
 adaptive = AdaptiveDtParams(dt_init=0.002, dt_min=0.0001, dt_max=0.005, tol=0.001)
 println("Running 2ms dynamics...")
@@ -69,7 +55,7 @@ snapshots = out.result.psi_snapshots
 times = out.result.times
 
 for (si, snap) in enumerate(snapshots)
-    t_ms = round(times[si] * t_unit * 1e3, digits=2)
+    t_ms = round(times[si] * EU_t_unit * 1e3, digits=2)
     println("t = $t_ms ms")
     println("  m_F   pop     dom_n  weight   top modes")
     println("  " * "-"^55)

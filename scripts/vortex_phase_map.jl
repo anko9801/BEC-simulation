@@ -1,21 +1,11 @@
-using SpinorBEC
-using JLD2, Random
+include(joinpath(@__DIR__, "eu151_setup.jl"))
+include(joinpath(@__DIR__, "json_utils.jl"))
 
 println("=== Vortex structure visualization (density + phase at z=0) ===\n")
 
-const ω_ref = 2π * 110.0
-const m_Eu = Eu151.mass
-const a_ho = sqrt(Units.HBAR / (m_Eu * ω_ref))
-const t_unit = 1.0 / ω_ref
-const a_s_dl = Eu151.a0 / a_ho
-const c0 = 4π * a_s_dl * 50_000
-const c_dd_val = 50_000 * compute_c_dd(Eu151) / (Units.HBAR * ω_ref * a_ho^3)
-const λ_z = 130.0 / 110.0
-const p_weak = (7.0 / 6.0) * Units.MU_BOHR * 2.6e-9 / (Units.HBAR * ω_ref)
-
 N_GRID = parse(Int, get(ENV, "VORTEX_GRID", "32"))
 grid = make_grid(GridConfig((N_GRID, N_GRID, N_GRID), (20.0, 20.0, 20.0)))
-atom = AtomSpecies("Eu151", 1.0, 6, a_s_dl, 0.0)
+atom = AtomSpecies("Eu151", 1.0, 6, EU_a_s_dl, 0.0)
 sys = SpinSystem(atom.F)
 n_comp = sys.n_components
 
@@ -28,15 +18,13 @@ if isfile(cache_file) && !haskey(ENV, "VORTEX_RERUN")
     times = cached["times"]
 else
     psi_gs = load(joinpath(@__DIR__, "cache_eu151_gs_3d_$(N_GRID).jld2"), "psi")
-    psi = copy(psi_gs)
-    Random.seed!(42)
-    SpinorBEC._add_noise!(psi, 0.001, n_comp, 3, grid)
+    psi = seed_noise(psi_gs, n_comp, 3, grid)
 
-    t_end = 2e-3 / t_unit
+    t_end = 2e-3 / EU_t_unit
     sp = SimParams(; dt=0.001, n_steps=1)
-    ws = make_workspace(; grid, atom, interactions=InteractionParams(c0, 0.0),
-        zeeman=ZeemanParams(p_weak, 0.0), potential=HarmonicTrap((1.0, 1.0, λ_z)),
-        sim_params=sp, psi_init=psi, enable_ddi=true, c_dd=c_dd_val)
+    ws = make_workspace(; grid, atom, interactions=InteractionParams(EU_c0, 0.0),
+        zeeman=ZeemanParams(EU_p_weak, 0.0), potential=HarmonicTrap((1.0, 1.0, EU_λ_z)),
+        sim_params=sp, psi_init=psi, enable_ddi=true, c_dd=EU_c_dd)
 
     adaptive = AdaptiveDtParams(dt_init=0.002, dt_min=0.0001, dt_max=0.005, tol=0.001)
     println("Running 2ms dynamics (grid=$(N_GRID)³)...")
@@ -57,29 +45,12 @@ iz0 = div(nz, 2) + 1
 
 show_components = [1, 2, 3, 4, 5, 6, 7]  # m=+6 to m=0
 
-function _to_json(x::Number)
-    isnan(x) || isinf(x) ? "null" : string(x)
-end
-function _to_json(v::AbstractVector)
-    "[" * join((_to_json(e) for e in v), ",") * "]"
-end
-function _to_json(m::AbstractMatrix)
-    "[" * join((_to_json(m[i, :]) for i in axes(m, 1)), ",") * "]"
-end
-function _to_json(s::AbstractString)
-    "\"$(escape_string(s))\""
-end
-function _to_json(d::Dict)
-    pairs = ["\"$(k)\":$(_to_json(v))" for (k, v) in d]
-    "{" * join(pairs, ",") * "}"
-end
-
 # Per-component density threshold: 5% of each component's own peak at each snapshot
 println("Using per-component phase masking (5% of own peak)")
 
 snap_data = []
 for (si, snap) in enumerate(snapshots)
-    t_ms = round(times[si] * t_unit * 1e3, digits=2)
+    t_ms = round(times[si] * EU_t_unit * 1e3, digits=2)
     comp_data = []
     for c in show_components
         m_F = sys.F - (c - 1)

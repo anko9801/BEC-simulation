@@ -1,47 +1,25 @@
-using SpinorBEC
-using JLD2
+include(joinpath(@__DIR__, "eu151_setup.jl"))
 using Printf
-using Random
 
 println("=== Convergence test: L2 wavefunction estimator ===")
 
-const ω_ref    = 2π * 110.0
-const ω_z_hz   = 130.0
-const λ_z      = ω_z_hz / 110.0
-const N_atoms  = 50_000
-const m_Eu     = Eu151.mass
-const a_ho     = sqrt(Units.HBAR / (m_Eu * ω_ref))
-const t_unit   = 1.0 / ω_ref
+const c1 = EU_c0 / 36
 
-const a_s_dl = Eu151.a0 / a_ho
-const c0     = 4π * a_s_dl * N_atoms
-const c1     = c0 / 36
-const c_dd_SI       = compute_c_dd(Eu151)
-const c_dd_per_atom = c_dd_SI / (Units.HBAR * ω_ref * a_ho^3)
-const c_dd          = N_atoms * c_dd_per_atom
-
-const g_F    = 7.0 / 6.0
-const B_weak = 2.6e-9
-const p_weak = g_F * Units.MU_BOHR * B_weak / (Units.HBAR * ω_ref)
-
-atom = AtomSpecies("Eu151", 1.0, 6, a_s_dl, 0.0)
+atom = AtomSpecies("Eu151", 1.0, 6, EU_a_s_dl, 0.0)
 grid = make_grid(GridConfig((32, 32, 32), (20.0, 20.0, 20.0)))
-interactions = InteractionParams(c0, c1)
-trap = HarmonicTrap((1.0, 1.0, λ_z))
+interactions = InteractionParams(EU_c0, c1)
+trap = HarmonicTrap((1.0, 1.0, EU_λ_z))
 sys = SpinSystem(atom.F)
 n_comp = sys.n_components
 n_pts = grid.config.n_points
 ndim = 3
 
-gs_cache = joinpath(@__DIR__, "cache_eu151_gs_3d.jld2")
-psi_gs = load(gs_cache, "psi")
+psi_gs = load(joinpath(@__DIR__, "cache_eu151_gs_3d.jld2"), "psi")
 
 # Seed noise ONCE and reuse for all tests
-Random.seed!(42)
-psi_seeded = copy(psi_gs)
-SpinorBEC._add_noise!(psi_seeded, 0.001, n_comp, ndim, grid)
+psi_seeded = seed_noise(psi_gs, n_comp, ndim, grid)
 
-t_test = 2.0e-3 / t_unit
+t_test = 2.0e-3 / EU_t_unit
 println("t_test = $(round(t_test, digits=3)) ω⁻¹")
 println("Using _wavefunction_l2_change (phase-sensitive)")
 
@@ -61,11 +39,11 @@ for (label, tol, fixed_dt) in test_configs
     sp = SimParams(; dt=0.001, n_steps=1)
     ws = make_workspace(;
         grid, atom, interactions,
-        zeeman=ZeemanParams(p_weak, 0.0),
+        zeeman=ZeemanParams(EU_p_weak, 0.0),
         potential=trap,
         sim_params=sp,
         psi_init=copy(psi_seeded),
-        enable_ddi=true, c_dd,
+        enable_ddi=true, c_dd=EU_c_dd,
     )
 
     t_start = time()
@@ -81,11 +59,11 @@ for (label, tol, fixed_dt) in test_configs
         sp2 = SimParams(; dt=fixed_dt, n_steps=n_fixed, save_every=n_fixed)
         ws2 = make_workspace(;
             grid, atom, interactions,
-            zeeman=ZeemanParams(p_weak, 0.0),
+            zeeman=ZeemanParams(EU_p_weak, 0.0),
             potential=trap,
             sim_params=sp2,
             psi_init=copy(psi_seeded),
-            enable_ddi=true, c_dd,
+            enable_ddi=true, c_dd=EU_c_dd,
         )
         run_simulation!(ws2)
         ws = ws2
@@ -136,11 +114,11 @@ end
 # Energy drift from initial
 E0 = total_energy(make_workspace(;
     grid, atom, interactions,
-    zeeman=ZeemanParams(p_weak, 0.0),
+    zeeman=ZeemanParams(EU_p_weak, 0.0),
     potential=trap,
     sim_params=SimParams(; dt=0.001, n_steps=1),
     psi_init=copy(psi_seeded),
-    enable_ddi=true, c_dd,
+    enable_ddi=true, c_dd=EU_c_dd,
 ))
 println("\nInitial energy E₀ = $(round(E0, digits=4))")
 println("Energy drift |E-E₀|/|E₀|:")

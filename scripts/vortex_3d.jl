@@ -1,10 +1,8 @@
-using SpinorBEC
+include(joinpath(@__DIR__, "eu151_params.jl"))
+include(joinpath(@__DIR__, "json_utils.jl"))
 using JLD2
 
 println("=== 3D Vortex Core Visualization ===\n")
-
-const ω_ref = 2π * 110.0
-const t_unit = 1.0 / ω_ref
 
 N_GRID = parse(Int, get(ENV, "VORTEX_GRID", "64"))
 grid = make_grid(GridConfig((N_GRID, N_GRID, N_GRID), (20.0, 20.0, 20.0)))
@@ -39,16 +37,6 @@ println("Grid: $(sx)×$(sy)×$(sz) (stride=$stride)")
 show_components = [1, 2, 5, 7]  # m=+6, +5, +2, 0
 comp_labels = ["+6", "+5", "+2", "0"]
 
-function _to_json(x::Number)
-    isnan(x) || isinf(x) ? "null" : string(round(x, sigdigits=5))
-end
-function _to_json(s::AbstractString)
-    "\"$(escape_string(s))\""
-end
-function _to_json(v::AbstractVector)
-    "[" * join((_to_json(e) for e in v), ",") * "]"
-end
-
 n_total = sx * sy * sz
 fx = Vector{Float64}(undef, n_total)
 fy = Vector{Float64}(undef, n_total)
@@ -60,13 +48,10 @@ let idx = 1
     end
 end
 
-# For vortex core visualization: invert density inside condensate
-# vortex_signal = max_dens - dens (only where dens > noise floor)
-# This makes vortex cores bright and condensate bulk dark
 println("Building JSON...")
 snap_data = []
 for (si, snap) in enumerate(snapshots)
-    t_ms = round(times[si] * t_unit * 1e3, digits=2)
+    t_ms = round(times[si] * EU_t_unit * 1e3, digits=2)
     comp_vals = []
     for c in show_components
         vals = Vector{Float64}(undef, n_total)
@@ -79,14 +64,12 @@ for (si, snap) in enumerate(snapshots)
                 idx += 1
             end
         end
-        # Create inverted signal: high where density is low (vortex cores)
-        # but zero outside condensate
         noise_floor = peak * 0.01
         for i in eachindex(vals)
             if vals[i] < noise_floor
-                vals[i] = 0.0  # outside condensate
+                vals[i] = 0.0
             else
-                vals[i] = peak - vals[i]  # invert: vortex cores become peaks
+                vals[i] = peak - vals[i]
             end
         end
         push!(comp_vals, _to_json(vals))
