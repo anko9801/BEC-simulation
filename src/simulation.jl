@@ -85,7 +85,7 @@ function make_workspace(;
 
     density_buf = zeros(Float64, grid.config.n_points)
 
-    Workspace{N,typeof(psi),typeof(plans.forward),typeof(plans.inverse)}(
+    Workspace(
         state, plans, kinetic_phase, V, density_buf, sm, grid, atom, interactions, zeeman, potential, sim_params,
         ddi, ddi_bufs, raman, loss,
     )
@@ -231,7 +231,7 @@ function _rebuild_workspace_with_dt(ws::Workspace{N}, new_dt::Float64) where {N}
                    ws.sim_params.normalize_every, ws.sim_params.save_every)
     kinetic_phase = prepare_kinetic_phase(ws.grid, new_dt; imaginary_time=true)
 
-    Workspace{N,typeof(ws.state.psi),typeof(ws.fft_plans.forward),typeof(ws.fft_plans.inverse)}(
+    Workspace(
         ws.state, ws.fft_plans, kinetic_phase, ws.potential_values, ws.density_buf,
         ws.spin_matrices, ws.grid, ws.atom, ws.interactions,
         ws.zeeman, ws.potential, sp, ws.ddi, ws.ddi_bufs, ws.raman, ws.loss,
@@ -354,7 +354,7 @@ end
 # --- Adaptive time stepping ---
 
 function _update_kinetic_phase!(kinetic_phase, k_squared, dt)
-    @. kinetic_phase = exp(-0.5im * k_squared * dt)
+    @. kinetic_phase = cis(-0.5 * k_squared * dt)
     nothing
 end
 
@@ -381,15 +381,31 @@ function _density_relative_change(psi_new, psi_old)
     sqrt(diff_sq / max(old_sq, 1e-300))
 end
 
-function _adaptive_split_step!(ws::Workspace{N}, dt::Float64, n_comp::Int, ndim::Int) where {N}
-    _half_potential_step!(ws, dt / 2, n_comp, ndim, false)
-    apply_kinetic_step!(ws.state.psi, ws.state.fft_buf, ws.kinetic_phase, ws.fft_plans, n_comp, ndim)
-    _half_potential_step!(ws, dt / 2, n_comp, ndim, false)
-    if ws.loss !== nothing
-        apply_loss_step!(ws.state.psi, ws.loss, ws.spin_matrices.system.F, dt, n_comp, ndim)
+"""
+Wavefunction L2 relative change: ‖ψ_new - ψ_old‖² / ‖ψ_old‖².
+
+Captures spatially-varying phase changes that density estimators miss.
+Kinetic steps, DDI rotations, and diagonal potential are all unitary
+(density-preserving), so their splitting errors are invisible to density.
+This estimator sees them via the full wavefunction difference.
+
+For unitary evolution (‖ψ_new‖ = ‖ψ_old‖, exact for split-step):
+    ‖Δψ‖²/‖ψ‖² = 2(1 - Re⟨ψ_old|ψ_new⟩/‖ψ‖²) ≈ ⟨δφ²⟩
+
+Cost: identical to density estimator (one O(N) pass).
+"""
+function _wavefunction_l2_change(psi_new, psi_old)
+    diff_sq = 0.0
+    old_sq = 0.0
+    @inbounds for i in eachindex(psi_new, psi_old)
+        diff_sq += abs2(psi_new[i] - psi_old[i])
+        old_sq += abs2(psi_old[i])
     end
-    ws.state.t += dt
-    ws.state.step += 1
+    diff_sq / max(old_sq, 1e-300)
+end
+
+@inline function _flush_fsal!(ws::Workspace{N}, fsal_dt, n_comp, ndim) where {N}
+    _half_potential_step!(ws, fsal_dt / 2, n_comp, ndim, false)
     nothing
 end
 
@@ -405,6 +421,12 @@ function run_simulation_adaptive!(ws::Workspace{N};
     dt = clamp(adaptive.dt_init, adaptive.dt_min, adaptive.dt_max)
     current_kinetic_dt = NaN
 
+    psi_plan_buf = similar(ws.state.psi)
+    dims = ntuple(identity, N)
+    batched_fwd = plan_fft!(psi_plan_buf, dims; flags=FFTW.MEASURE)
+    batched_inv = plan_ifft!(psi_plan_buf, dims; flags=FFTW.MEASURE)
+    kp_bc = reshape(ws.kinetic_phase, size(ws.kinetic_phase)..., 1)
+
     times = Float64[ws.state.t]
     energies = Float64[total_energy(ws)]
     norms = Float64[total_norm(ws.state.psi, ws.grid)]
@@ -416,6 +438,9 @@ function run_simulation_adaptive!(ws::Workspace{N};
     n_accepted = 0
     n_rejected = 0
 
+    fsal_deferred = false
+    fsal_dt = 0.0
+
     while ws.state.t < t_end - 1e-14
         dt_step = min(dt, t_end - ws.state.t)
         remaining_to_save = next_save - ws.state.t
@@ -424,46 +449,97 @@ function run_simulation_adaptive!(ws::Workspace{N};
         end
         dt_step = max(dt_step, adaptive.dt_min)
 
+        is_clamped = dt_step < dt * 0.99
+        may_reject = !is_clamped && dt_step > adaptive.dt_min * 1.01
+
         if dt_step != current_kinetic_dt
             _update_kinetic_phase!(ws.kinetic_phase, ws.grid.k_squared, dt_step)
             current_kinetic_dt = dt_step
         end
 
-        psi_old .= ws.state.psi
-        t_before = ws.state.t
-        step_before = ws.state.step
-
-        _adaptive_split_step!(ws, dt_step, n_comp, N)
-
-        rel_change = _density_relative_change(ws.state.psi, psi_old)
-
-        if rel_change > adaptive.tol && dt_step > adaptive.dt_min * 1.01
-            ws.state.psi .= psi_old
-            ws.state.t = t_before
-            ws.state.step = step_before
-            factor = max(0.5, 0.9 * sqrt(adaptive.tol / rel_change))
-            dt = max(dt_step * factor, adaptive.dt_min)
-            current_kinetic_dt = NaN
-            n_rejected += 1
-            continue
+        need_error_est = !is_clamped
+        if need_error_est
+            psi_old .= ws.state.psi
         end
 
+        prev_fsal_deferred = fsal_deferred
+        prev_fsal_dt = fsal_dt
+
+        if fsal_deferred && abs(fsal_dt - dt_step) < 1e-14
+            _half_potential_step!(ws, dt_step, n_comp, N, false)
+        elseif fsal_deferred
+            _half_potential_step!(ws, fsal_dt / 2, n_comp, N, false)
+            _half_potential_step!(ws, dt_step / 2, n_comp, N, false)
+        else
+            _half_potential_step!(ws, dt_step / 2, n_comp, N, false)
+        end
+        fsal_deferred = false
+
+        batched_fwd * ws.state.psi
+        ws.state.psi .*= kp_bc
+        batched_inv * ws.state.psi
+
+        rel_change = 0.0
+        if may_reject
+            rel_change = _wavefunction_l2_change(ws.state.psi, psi_old)
+            if rel_change > adaptive.tol
+                ws.state.psi .= psi_old
+                fsal_deferred = prev_fsal_deferred
+                fsal_dt = prev_fsal_dt
+                factor = max(0.5, 0.9 * sqrt(adaptive.tol / rel_change))
+                dt = max(dt_step * factor, adaptive.dt_min)
+                current_kinetic_dt = NaN
+                n_rejected += 1
+                continue
+            end
+        end
+
+        fsal_deferred = true
+        fsal_dt = dt_step
+
+        if ws.loss !== nothing
+            apply_loss_step!(ws.state.psi, ws.loss, ws.spin_matrices.system.F, dt_step, n_comp, N, ws.density_buf)
+        end
+
+        ws.state.t += dt_step
+        ws.state.step += 1
         n_accepted += 1
 
-        if dt_step >= dt * 0.99
+        if !is_clamped
+            if !may_reject
+                rel_change = _wavefunction_l2_change(ws.state.psi, psi_old)
+            end
             factor = rel_change > 1e-300 ? min(2.0, 0.9 * sqrt(adaptive.tol / rel_change)) : 2.0
             dt = clamp(dt * factor, adaptive.dt_min, adaptive.dt_max)
         end
 
         if ws.state.t >= next_save - 1e-14
+            _flush_fsal!(ws, fsal_dt, n_comp, N)
+            fsal_deferred = false
+
+            E_now = total_energy(ws)
+            nrm_now = total_norm(ws.state.psi, ws.grid)
+            E_per_N = E_now / max(nrm_now, 1e-300)
+            if length(energies) >= 2
+                E_per_N_prev = energies[end] / max(norms[end], 1e-300)
+                de_rel = abs(E_per_N - E_per_N_prev) / max(abs(E_per_N_prev), 1e-300)
+                if de_rel > 0.01
+                    @warn "E/N drift $(round(de_rel*100, digits=2))% between snapshots at t=$(round(ws.state.t, digits=4))"
+                end
+            end
+
             push!(times, ws.state.t)
-            push!(energies, total_energy(ws))
-            push!(norms, total_norm(ws.state.psi, ws.grid))
+            push!(energies, E_now)
+            push!(norms, nrm_now)
             push!(mags, magnetization(ws.state.psi, ws.grid, sys))
             push!(snapshots, copy(ws.state.psi))
             callback !== nothing && callback(ws, n_accepted)
             next_save += save_interval
         end
+    end
+
+    if fsal_deferred
+        _flush_fsal!(ws, fsal_dt, n_comp, N)
     end
 
     if isempty(times) || abs(times[end] - ws.state.t) > 1e-12

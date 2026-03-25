@@ -89,6 +89,16 @@ using SpinorBEC
         phase = ComplexF64[exp(0.5im), 2exp(0.5im), 3exp(0.5im)]
         @test SpinorBEC._psi_relative_change(phase, a) > 0.1
         @test SpinorBEC._density_relative_change(phase, a) < 1e-14
+
+        # Wavefunction L2 change
+        @test SpinorBEC._wavefunction_l2_change(a, a) == 0.0
+        @test SpinorBEC._wavefunction_l2_change(c, a) > 0.0
+        # Phase rotation IS detected by L2 change (unlike density)
+        @test SpinorBEC._wavefunction_l2_change(phase, a) > 0.01
+        # Global phase: ψ_new = e^{iφ} ψ_old → L2 change = 2(1 - cos φ)
+        global_phase = a .* cis(0.1)
+        expected = 2 * (1 - cos(0.1))
+        @test SpinorBEC._wavefunction_l2_change(global_phase, a) ≈ expected rtol=1e-10
     end
 
     @testset "YAML adaptive_dt parsing" begin

@@ -2,11 +2,42 @@ using SpinorBEC
 using JLD2
 
 println("=== Eu151 EdH Stern-Gerlach Simulation (3D) ===")
+println("    Matsui et al., Science 391, 384-388 (2026)")
+
+# =================================================================
+# Physical parameters (Matsui et al.)
+# =================================================================
+
+const ω_ref    = 2π * 110.0         # reference trap freq [rad/s]
+const ω_z_hz   = 130.0              # axial trap freq [Hz]
+const λ_z      = ω_z_hz / 110.0     # ω_z / ω_ref ≈ 1.182
+const N_atoms  = 50_000
+const m_Eu     = Eu151.mass
+const a_ho     = sqrt(Units.HBAR / (m_Eu * ω_ref))
+const t_unit   = 1.0 / ω_ref        # ≈ 1.447 ms
+
+# Dimensionless parameters (3D)
+const a_s_dl = Eu151.a0 / a_ho
+const c0     = 4π * a_s_dl * N_atoms          # ≈ 4689
+const c1     = c0 / 36                         # ≈ 130  (antiferromagnetic)
+const c_dd_SI       = compute_c_dd(Eu151)
+const c_dd_per_atom = c_dd_SI / (Units.HBAR * ω_ref * a_ho^3)
+const c_dd          = N_atoms * c_dd_per_atom   # ≈ 609
+
+# Weak magnetic field: B = 2.6 nT
+const g_F    = 7.0 / 6.0
+const B_weak = 2.6e-9
+const p_weak = g_F * Units.MU_BOHR * B_weak / (Units.HBAR * ω_ref)  # ≈ 0.39
+
+println("c0=$(round(c0; digits=1)), c1=$(round(c1; digits=1)), c_dd=$(round(c_dd; digits=1))")
+println("p_weak=$(round(p_weak; digits=3)) (B=2.6 nT)")
+println("a_ho=$(round(a_ho*1e6; digits=3)) μm, 1ms=$(round(1e-3/t_unit; digits=3)) ω⁻¹")
 
 # --- Setup ---
-atom = Eu151
-grid = make_grid(GridConfig((24, 24, 24), (20.0, 20.0, 20.0)))
-interactions = InteractionParams(378.0, 0.0)
+atom = AtomSpecies("Eu151", 1.0, 6, a_s_dl, 0.0)
+grid = make_grid(GridConfig((32, 32, 32), (20.0, 20.0, 20.0)))
+interactions = InteractionParams(c0, c1)
+trap = HarmonicTrap((1.0, 1.0, λ_z))
 sys = SpinSystem(atom.F)
 n_comp = sys.n_components
 n_pts = grid.config.n_points
@@ -19,10 +50,11 @@ psi_gs = if isfile(gs_cache)
     load(gs_cache, "psi")
 else
     println("Finding ground state (first run, will cache)...")
+    # c1=0 for ITP: at p=100 Zeeman dominates, spin mixing wastes D=13 eigendecomps
     gs = find_ground_state(;
-        grid, atom, interactions,
+        grid, atom, interactions=InteractionParams(c0, 0.0),
         zeeman=ZeemanParams(100.0, 0.0),
-        potential=HarmonicTrap((1.0, 1.0, 1.0)),
+        potential=trap,
         dt=0.005, n_steps=20000, tol=1e-9,
         initial_state=:ferromagnetic,
         enable_ddi=false,
@@ -34,52 +66,61 @@ else
     psi_out
 end
 
-# --- Phase 1: Quench p → 0 ---
-println("Phase 1: Quench (100 → 0)...")
-t_quench = time()
-sp_quench = SimParams(; dt=0.002, n_steps=63, save_every=63)
-ws_quench = make_workspace(;
-    grid, atom, interactions,
-    zeeman=TimeDependentZeeman(t -> ZeemanParams(100.0 * max(1.0 - t / 0.126, 0.0), 0.0)),
-    potential=HarmonicTrap((1.0, 1.0, 1.0)),
-    sim_params=sp_quench,
-    psi_init=psi_gs,
-    enable_ddi=true, c_dd=49.0,
-)
-result_quench = run_simulation!(ws_quench)
-println("  done, t=$(ws_quench.state.t), elapsed=$(round(time()-t_quench, digits=1))s")
-
 # --- Seed quantum fluctuations ---
 noise_amp = 0.001
-println("Seeding spin fluctuations (noise amplitude $noise_amp, skip dominant)...")
-psi_seeded = copy(ws_quench.state.psi)
+println("Seeding spin fluctuations (noise=$noise_amp, skip dominant)...")
+psi_seeded = copy(psi_gs)
 SpinorBEC._add_noise!(psi_seeded, noise_amp, n_comp, ndim, grid)
 
-# --- Phase 2: Spin relaxation at zero field (adaptive dt) ---
-println("Phase 2: Spin relaxation (adaptive dt)...")
+# --- Spin relaxation at weak field (adaptive dt) ---
+# Paper: up to 40 ms observation time
+t_total_ms = 40.0
+t_end = t_total_ms * 1e-3 / t_unit
+println("Spin relaxation: t_end=$(round(t_end; digits=1)) ω⁻¹ ($(t_total_ms) ms)")
+println("  p=$( round(p_weak; digits=3)) (B=2.6 nT, NOT zero field)")
+
 t_relax = time()
-t_end = ws_quench.state.t + 2.0
 sp_relax = SimParams(; dt=0.001, n_steps=1)
 ws_relax = make_workspace(;
     grid, atom, interactions,
-    zeeman=ZeemanParams(0.0, 0.0),
-    potential=HarmonicTrap((1.0, 1.0, 1.0)),
+    zeeman=ZeemanParams(p_weak, 0.0),
+    potential=trap,
     sim_params=sp_relax,
     psi_init=psi_seeded,
-    enable_ddi=true, c_dd=49.0,
+    enable_ddi=true, c_dd,
 )
-ws_relax.state.t = ws_quench.state.t
-adaptive = AdaptiveDtParams(dt_init=0.005, dt_min=0.0001, dt_max=0.01, tol=5e-3)
-out = run_simulation_adaptive!(ws_relax; adaptive, t_end, save_interval=0.2)
+adaptive = AdaptiveDtParams(dt_init=0.005, dt_min=0.0001, dt_max=0.01, tol=0.005)
+t_start_wall = time()
+progress_cb = function(ws, step)
+    elapsed = time() - t_start_wall
+    dV = cell_volume(grid)
+    pops = Float64[]
+    for c in 1:n_comp
+        slice = SpinorBEC._component_slice(ndim, n_pts, c)
+        push!(pops, sum(abs2, view(ws.state.psi, slice...)) * dV)
+    end
+    total = sum(pops)
+    if total > 0; pops ./= total; end
+
+    Lz = orbital_angular_momentum(ws.state.psi, ws.grid, ws.fft_plans)
+    Mz = magnetization(ws.state.psi, ws.grid, sys)
+    Jz = Lz + Mz
+
+    t_ms = round(ws.state.t * t_unit * 1e3, digits=2)
+    println("  [$(round(elapsed, digits=1))s] t=$(t_ms)ms step=$(step) " *
+            "m6=$(round(pops[1], digits=4)) " *
+            "Lz=$(round(Lz, digits=3)) Mz=$(round(Mz, digits=3)) Jz=$(round(Jz, digits=3))")
+    flush(stdout)
+end
+out = run_simulation_adaptive!(ws_relax; adaptive, t_end, save_interval=t_end/20, callback=progress_cb)
 result_relax = out.result
 println("  done, t=$(ws_relax.state.t), elapsed=$(round(time()-t_relax, digits=1))s")
 println("  accepted=$(out.n_accepted), rejected=$(out.n_rejected), final_dt=$(round(out.final_dt, sigdigits=3))")
 
 # --- Extract data for visualization ---
-# Column density: integrate |ψ_m(x,y,z)|² along z
 println("Extracting visualization data...")
 
-a_ho_um = 0.82
+a_ho_um = round(a_ho * 1e6; digits=3)
 x_um = collect(grid.x[1]) .* a_ho_um
 y_um = collect(grid.x[2]) .* a_ho_um
 dz = grid.dx[3]
@@ -100,8 +141,8 @@ for idx in indices
     pops = Float64[]
     for c in 1:n_comp
         slice = SpinorBEC._component_slice(ndim, n_pts, c)
-        d3 = abs2.(view(psi, slice...))  # (Nx, Ny, Nz)
-        col_density = dropdims(sum(d3, dims=3), dims=3) .* dz  # integrate along z
+        d3 = abs2.(view(psi, slice...))
+        col_density = dropdims(sum(d3, dims=3), dims=3) .* dz
         push!(densities, collect(col_density))
         push!(pops, sum(d3) * cell_volume(grid))
     end
@@ -112,15 +153,28 @@ for idx in indices
 
     push!(snapshots_data, Dict(
         "t" => round(t, digits=4),
+        "t_ms" => round(t * t_unit * 1e3, digits=2),
         "populations" => round.(pops, digits=6),
         "densities" => [round.(d, digits=8) for d in densities],
     ))
 end
 
-# --- Print population diagnostics ---
-for snap in snapshots_data
-    p = snap["populations"]
-    println("t=$(snap["t"]): m6=$(round(p[end], digits=4)) m5=$(round(p[end-1], digits=4)) m4=$(round(p[end-2], digits=4))")
+# --- Angular momentum diagnostics ---
+println("\nAngular momentum evolution (EdH check):")
+println("  t [ms]  |   Lz    |   Mz    |   Jz    |  m₆     |  m₅")
+println("  " * "-"^65)
+plans_diag = make_fft_plans(n_pts)
+for (idx_i, idx) in enumerate(indices)
+    psi_snap = all_snapshots[idx]
+    t = times[idx]
+    t_ms = round(t * t_unit * 1e3, digits=2)
+
+    Lz = orbital_angular_momentum(psi_snap, grid, plans_diag)
+    Mz = magnetization(psi_snap, grid, sys)
+    Jz = Lz + Mz
+
+    p = snapshots_data[idx_i]["populations"]
+    println("  $(lpad(t_ms, 6)) | $(lpad(round(Lz, digits=3), 7)) | $(lpad(round(Mz, digits=3), 7)) | $(lpad(round(Jz, digits=3), 7)) | $(round(p[1], digits=4)) | $(round(p[2], digits=4))")
 end
 
 # --- Manual JSON serialization ---
@@ -175,7 +229,7 @@ html = """
   }
   #controls label { font-size: 13px; color: #aaa; }
   #time-slider { flex: 1; min-width: 180px; accent-color: #6366f1; }
-  #time-display { font-size: 14px; font-weight: 500; min-width: 110px; }
+  #time-display { font-size: 14px; font-weight: 500; min-width: 140px; }
   .sep { color: #333; }
   .vbtn {
     background: #1e1e30; border: 1px solid #3a3a5a; color: #ccc;
@@ -199,14 +253,15 @@ html = """
 </head>
 <body>
 <div id="header">
-  <h1>&sup1;&sup5;&sup1;Eu Einstein-de Haas &mdash; Stern-Gerlach (3D trap)</h1>
-  <p>F=6, 13 spin components | 3D isotropic harmonic trap |
+  <h1>&sup1;&sup5;&sup1;Eu Einstein-de Haas &mdash; Stern-Gerlach (3D)</h1>
+  <p>F=6, 13 components | 3D trap (&omega;<sub>x,y,z</sub>/2&pi; = 110, 110, 130 Hz) |
+     N = 5&times;10&sup4; | B = 2.6 nT |
      Column density &int;|&psi;<sub>m</sub>|&sup2; dz per m<sub>F</sub></p>
 </div>
 <div id="controls">
   <label>Time:</label>
   <input type="range" id="time-slider" min="0" max="0" value="0" step="1">
-  <span id="time-display">t = 0.000 &omega;&sup1;</span>
+  <span id="time-display">t = 0.0 ms</span>
   <span class="sep">|</span>
   <label>View:</label>
   <button class="vbtn on" data-v="3d">3D</button>
@@ -219,13 +274,12 @@ html = """
   <div id="sidebar">
     <div id="pop-chart"></div>
     <div class="info">
-      <h3>Stern-Gerlach 3D</h3>
-      <p>3D isotropic harmonic trap (&omega;<sub>x</sub>=&omega;<sub>y</sub>=&omega;<sub>z</sub>).
-      Each horizontal plane shows the column density
-      &int;|&psi;<sub>m</sub>(x,y,z)|&sup2; dz for one m<sub>F</sub>,
-      stacked vertically to simulate Stern-Gerlach separation.</p>
-      <p style="margin-top:6px">Colors are <b>normalized per component</b>.
-      Absolute populations are in the bar chart.</p>
+      <h3>Matsui et al. (2026)</h3>
+      <p>3D nearly-spherical trap (&omega;<sub>x,y</sub> = 110 Hz, &omega;<sub>z</sub> = 130 Hz).
+      Spin-polarized m<sub>F</sub>=+6 BEC quenched to B = 2.6 nT.
+      DDI drives spin relaxation with Einstein-de Haas mass circulation.</p>
+      <p style="margin-top:6px">c<sub>0</sub> &approx; 4689, c<sub>1</sub> = c<sub>0</sub>/36,
+      c<sub>dd</sub> &approx; 609, &epsilon;<sub>dd</sub> &approx; 0.55</p>
     </div>
   </div>
 </div>
@@ -334,7 +388,8 @@ Plotly.newPlot('pop-chart', buildPop(0), layPop, {responsive:true});
 
 slider.addEventListener('input', () => {
   const i = +slider.value;
-  tdisp.textContent = 't = ' + snaps[i].t.toFixed(3) + ' \\u03c9\\u207b\\u00b9';
+  const tms = snaps[i].t_ms !== undefined ? snaps[i].t_ms.toFixed(1) : snaps[i].t.toFixed(3);
+  tdisp.textContent = 't = ' + tms + ' ms';
   Plotly.react('plot3d', buildTraces(i), lay3d);
   Plotly.react('pop-chart', buildPop(i), layPop);
 });
@@ -353,5 +408,5 @@ document.querySelectorAll('.vbtn').forEach(b => {
 
 outpath = joinpath(@__DIR__, "..", "stern_gerlach_3d.html")
 write(outpath, html)
-println("Written: $outpath")
+println("\nWritten: $outpath")
 println("Done!")

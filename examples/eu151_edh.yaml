@@ -1,59 +1,61 @@
 # ================================================================
-# Eu151 Einstein-de Haas effect
+# Eu151 Einstein-de Haas effect (3D)
 # ================================================================
 #
 # Reference:
-#   "Probing spontaneously formed spin textures in a europium
-#    spinor dipolar gas via tilted-axis spin separation"
-#   Matsui et al., Institute of Science Tokyo
+#   Matsui et al., Science 391, 384-388 (2026)
+#   arXiv:2504.17357
 #
 # Physics:
-#   Spin-polarized F=6 BEC (m=+6) at zero magnetic field undergoes
-#   spin relaxation driven by DDI. Conservation of J_z = L_z + S_z
-#   transfers spin angular momentum to orbital (mass circulation).
+#   Spin-polarized F=6 BEC (m=+6) at weak magnetic field (B = 2.6 nT)
+#   undergoes spin relaxation driven by DDI. Conservation of
+#   J_z = L_z + S_z transfers spin → orbital angular momentum.
 #
-# Units: dimensionless (hbar = m = omega_perp = 1)
-#   length  = a_ho = sqrt(hbar / (m * omega_perp))
-#   energy  = hbar * omega_perp
-#   time    = 1 / omega_perp
+# Experimental conditions:
+#   Trap: (ωx, ωy, ωz)/(2π) = (110, 110, 130) Hz — nearly spherical
+#   N = 5×10⁴ atoms
+#   c₁/c₀ = 1/36 (antiferromagnetic spin-exchange)
+#   B = 2.6 nT (NOT zero)
+#   g_F = 7/6, μ = 7 μ_B
+#   Observation up to 40 ms
 #
-# === Unknown parameters (need experimental values) ===
-#   omega_perp : trap frequency, assumed 2pi x 100 Hz
-#   N_atoms    : atom number, assumed 15000
-#   g_F        : Lande factor, = 7/6 from mu = 7 mu_B, F = 6
+# Units: dimensionless (ℏ = m = ω_ref = 1), ω_ref = 2π × 110 Hz
+#   length  = a_ho = √(ℏ/(m ω_ref)) ≈ 0.780 μm
+#   energy  = ℏ ω_ref
+#   time    = 1/ω_ref ≈ 1.447 ms
 #
 # === Conversion formulae ===
-#   p = g_F * mu_B * B / (hbar * omega_perp)
-#   t_dimless = t_SI * omega_perp
-#   c0 = 4pi * (a_s / a_ho) * N  /  (sqrt(2pi) * a_z / a_ho)
-#   c_dd = C_dd * N / (hbar * omega * a_ho^3)  /  (sqrt(2pi) * a_z/a_ho)
+#   p = g_F × μ_B × B / (ℏ ω_ref)
+#   t_dimless = t_SI × ω_ref
+#   c0 = 4π × (a_s / a_ho) × N  (3D)
+#   c_dd = C_dd × N / (ℏ ω_ref × a_ho³)  (3D)
 #
-# === Reference values (omega_perp = 2pi x 100 Hz) ===
-#   a_ho  = 0.82 um
-#   a_z   = 1.16 um  (lambda_z = 0.5)
-#   1 ms  = 0.63 omega^{-1}
-#   1 mG  -> p ~ 16300  (but diagonal Zeeman is exact in split-step)
-#   c_dd  ~ 49
-#   c0    ~ 378
+# === Reference values (ω_ref = 2π × 110 Hz) ===
+#   a_ho  ≈ 0.780 μm
+#   1 ms  ≈ 0.691 ω⁻¹
+#   B = 2.6 nT → p ≈ 0.39
+#   c0    ≈ 4689
+#   c1    ≈ 130  (= c0/36)
+#   c_dd  ≈ 609
+#   ε_dd  ≈ 0.545
 # ================================================================
 
 experiment:
-  name: "Eu151 Einstein-de Haas (2D)"
+  name: "Eu151 Einstein-de Haas (3D)"
 
   system:
     atom: Eu151
     grid:
-      n_points: [64, 64]
-      box_size: [20.0, 20.0]
+      n_points: [32, 32, 32]
+      box_size: [20.0, 20.0, 20.0]
     interactions:
-      c0: 378.0
-      c1: 0.0
+      c0: 4689.0
+      c1: 130.0
     ddi:
       enabled: true
-      c_dd: 49.0
+      c_dd: 609.0
 
-  # Fully polarized ground state (m = +F)
-  # p >> c_dd locks spin to m=+6; p=100 avoids overflow with dt=0.005
+  # Fully polarized ground state at high field
   ground_state:
     dt: 0.005
     n_steps: 20000
@@ -64,29 +66,30 @@ experiment:
       q: 0.0
     potential:
       type: harmonic
-      omega: [1.0, 1.0]
+      omega: [1.0, 1.0, 1.182]
 
   sequence:
-    # ---- Phase 1: Fast quench to zero field ----
-    # Poster: "interruption" in 0.2 ms = 0.126 omega^{-1}
+    # ---- Phase 1: Quench to weak field ----
+    # Paper: quench to B = 2.6 nT (p ≈ 0.39)
+    # Duration ~0.2 ms ≈ 0.14 ω⁻¹
     - name: quench
-      duration: 0.126
+      duration: 0.14
       dt: 0.001
       save_every: 10
       zeeman:
         p:
           from: 100.0
-          to: 0.0
+          to: 0.39
         q: 0.0
 
-    # ---- Phase 2: Spin relaxation at zero field ----
-    # noise_amplitude seeds DDI instability (breaks m=+6 eigenstate symmetry)
-    # 5 ms = 3.14 omega^{-1}
+    # ---- Phase 2: Spin relaxation at weak field ----
+    # noise_amplitude seeds DDI instability
+    # 40 ms ≈ 27.6 ω⁻¹
     - name: spin_relaxation
-      duration: 3.14
+      duration: 27.6
       dt: 0.001
       save_every: 20
       noise_amplitude: 0.001
       zeeman:
-        p: 0.0
+        p: 0.39
         q: 0.0

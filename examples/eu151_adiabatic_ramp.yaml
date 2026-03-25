@@ -1,34 +1,36 @@
 # ================================================================
-# Eu151 adiabatic magnetic field ramp
+# Eu151 adiabatic magnetic field ramp (3D)
 # ================================================================
 #
-# Poster experiment (II): slowly ramp B from finite value to near
-# zero. Spins adiabatically follow the local dipolar magnetic field.
+# Reference:
+#   Matsui et al., Science 391, 384-388 (2026)
+#   arXiv:2504.17357
+#
+# Protocol: slowly ramp B from finite value toward weak field.
+# Spins adiabatically follow the local dipolar magnetic field.
 # Resulting spin texture differs from EdH (dynamic formation).
 #
-# Protocol (poster):
-#   1 G  -->  1 mG   over  50 ms  (linear ramp)
-#   1 mG -->  68 uG  over 200 ms  (slow ramp, adiabatic)
-#   hold at 68 uG for observation
+# See eu151_edh.yaml header for unit conventions and parameter values.
 #
-# Dimensionless values assume omega_perp = 2pi x 100 Hz.
-# See eu151_edh.yaml header for conversion formulae.
+# Dimensionless: ℏ = m = ω_ref = 1, ω_ref = 2π × 110 Hz
+#   1 ms ≈ 0.691 ω⁻¹
+#   p = g_F μ_B B / (ℏ ω_ref)
 # ================================================================
 
 experiment:
-  name: "Eu151 adiabatic ramp (2D)"
+  name: "Eu151 adiabatic ramp (3D)"
 
   system:
     atom: Eu151
     grid:
-      n_points: [64, 64]
-      box_size: [20.0, 20.0]
+      n_points: [32, 32, 32]
+      box_size: [20.0, 20.0, 20.0]
     interactions:
-      c0: 378.0
-      c1: 0.0
+      c0: 4689.0
+      c1: 130.0
     ddi:
       enabled: true
-      c_dd: 49.0
+      c_dd: 609.0
 
   ground_state:
     dt: 0.005
@@ -40,41 +42,41 @@ experiment:
       q: 0.0
     potential:
       type: harmonic
-      omega: [1.0, 1.0]
+      omega: [1.0, 1.0, 1.182]
 
   sequence:
     # ---- Phase 1: Ramp from high field to moderate ----
-    # 1 G -> 1 mG over 50 ms = 31.4 omega^{-1}
-    # Adiabatic: atoms stay in m = +6 throughout
+    # 1 G → 1 mG over 50 ms ≈ 34.6 ω⁻¹
+    # p(1G) ≈ 150000, p(1mG) ≈ 150
     - name: ramp_high_to_moderate
-      duration: 31.4
+      duration: 34.6
       dt: 0.005
       save_every: 200
       zeeman:
         p:
           from: 5000.0
-          to: 50.0
+          to: 150.0
         q: 0.0
 
-    # ---- Phase 2: Slow ramp to near-zero ----
-    # 1 mG -> 68 uG over 200 ms = 125.7 omega^{-1}
-    # Spins should adiabatically follow local dipolar field
+    # ---- Phase 2: Slow ramp to near weak field ----
+    # 1 mG → 68 μG over 200 ms ≈ 138.2 ω⁻¹
+    # p(68μG) ≈ 10
     - name: ramp_moderate_to_low
-      duration: 125.7
+      duration: 138.2
       dt: 0.005
       save_every: 500
       zeeman:
         p:
-          from: 50.0
-          to: 3.0
+          from: 150.0
+          to: 10.0
         q: 0.0
 
     # ---- Phase 3: Hold and observe ----
-    # 5 ms = 3.14 omega^{-1}
+    # 5 ms ≈ 3.5 ω⁻¹
     - name: hold
-      duration: 3.14
+      duration: 3.5
       dt: 0.001
       save_every: 50
       zeeman:
-        p: 3.0
+        p: 10.0
         q: 0.0
