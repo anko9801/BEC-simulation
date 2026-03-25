@@ -19,7 +19,7 @@ const t_unit   = 1.0 / ω_ref        # ≈ 1.447 ms
 # Dimensionless parameters (3D)
 const a_s_dl = Eu151.a0 / a_ho
 const c0     = 4π * a_s_dl * N_atoms          # ≈ 4689
-const c1     = c0 / 36                         # ≈ 130  (antiferromagnetic)
+const c1     = 0.0                               # Eu151: a_F unknown, DDI dominates
 const c_dd_SI       = compute_c_dd(Eu151)
 const c_dd_per_atom = c_dd_SI / (Units.HBAR * ω_ref * a_ho^3)
 const c_dd          = N_atoms * c_dd_per_atom   # ≈ 609
