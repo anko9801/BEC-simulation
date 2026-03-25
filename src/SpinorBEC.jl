@@ -47,6 +47,7 @@ export HarmonicTrap, NoPotential, GravityPotential, CompositePotential
 
 # Grid
 export make_grid, make_fft_plans, cell_volume, n_spatial_points
+export load_fftw_wisdom, save_fftw_wisdom
 
 # Spin
 export spin_matrices
@@ -113,7 +114,7 @@ export thomas_fermi_radius, thomas_fermi_radius_harmonic
 export phase_diagram_point, component_populations
 
 # Simulation
-export find_ground_state, run_simulation!, run_simulation_adaptive!, make_workspace, init_psi
+export find_ground_state, run_simulation!, run_simulation_adaptive!, run_simulation_yoshida!, make_workspace, init_psi
 
 # I/O
 export save_state, load_state

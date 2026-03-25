@@ -53,6 +53,7 @@ function make_workspace(;
     c_dd::Float64=NaN,
     raman::Union{Nothing,RamanCoupling{N}}=nothing,
     loss::Union{Nothing,LossParams}=nothing,
+    fft_flags=FFTW.MEASURE,
 ) where {N}
     sys = SpinSystem(atom.F)
     sm = spin_matrices(atom.F)
@@ -66,7 +67,7 @@ function make_workspace(;
     fft_buf = zeros(ComplexF64, grid.config.n_points)
     state = SimState{N,typeof(psi)}(psi, fft_buf, 0.0, 0)
 
-    plans = make_fft_plans(grid.config.n_points)
+    plans = make_fft_plans(grid.config.n_points; flags=fft_flags)
     kinetic_phase = prepare_kinetic_phase(grid, sim_params.dt; imaginary_time=sim_params.imaginary_time)
     V = evaluate_potential(potential, grid)
 
@@ -131,6 +132,7 @@ function find_ground_state(;
     c_dd::Float64=NaN,
     adaptive_dt::Bool=false,
     dt_max::Float64=10.0 * dt,
+    fft_flags=FFTW.MEASURE,
 )
     psi0 = if psi_init === nothing
         sys = SpinSystem(atom.F)
@@ -144,12 +146,12 @@ function find_ground_state(;
     if adaptive_dt
         return _find_ground_state_adaptive(;
             grid, atom, interactions, zeeman, potential,
-            dt, n_steps, tol, psi0, enable_ddi, c_dd, dt_max,
+            dt, n_steps, tol, psi0, enable_ddi, c_dd, dt_max, fft_flags,
         )
     end
 
     sp = SimParams(; dt, n_steps, imaginary_time=true, normalize_every=1, save_every=max(1, n_steps ÷ 10))
-    ws = make_workspace(; grid, atom, interactions, zeeman, potential, sim_params=sp, psi_init=psi0, enable_ddi, c_dd)
+    ws = make_workspace(; grid, atom, interactions, zeeman, potential, sim_params=sp, psi_init=psi0, enable_ddi, c_dd, fft_flags)
 
     E_prev = total_energy(ws)
     converged = false
@@ -179,7 +181,7 @@ Strategy: run check_every steps, then evaluate energy.
 """
 function _find_ground_state_adaptive(;
     grid, atom, interactions, zeeman, potential,
-    dt, n_steps, tol, psi0, enable_ddi, c_dd, dt_max,
+    dt, n_steps, tol, psi0, enable_ddi, c_dd, dt_max, fft_flags=FFTW.MEASURE,
 )
     current_dt = dt
     check_every = max(1, n_steps ÷ 100)
@@ -189,7 +191,7 @@ function _find_ground_state_adaptive(;
     sp = SimParams(; dt=current_dt, n_steps=check_every, imaginary_time=true,
                    normalize_every=1, save_every=check_every)
     ws = make_workspace(; grid, atom, interactions, zeeman, potential,
-                        sim_params=sp, psi_init=psi_current, enable_ddi, c_dd)
+                        sim_params=sp, psi_init=psi_current, enable_ddi, c_dd, fft_flags)
     E_prev = total_energy(ws)
     converged = false
     total_steps = 0
@@ -540,6 +542,119 @@ function run_simulation_adaptive!(ws::Workspace{N};
 
     if fsal_deferred
         _flush_fsal!(ws, fsal_dt, n_comp, N)
+    end
+
+    if isempty(times) || abs(times[end] - ws.state.t) > 1e-12
+        push!(times, ws.state.t)
+        push!(energies, total_energy(ws))
+        push!(norms, total_norm(ws.state.psi, ws.grid))
+        push!(mags, magnetization(ws.state.psi, ws.grid, sys))
+        push!(snapshots, copy(ws.state.psi))
+    end
+
+    (result=SimulationResult(times, energies, norms, mags, snapshots),
+     n_accepted=n_accepted, n_rejected=n_rejected, final_dt=dt)
+end
+
+"""
+Adaptive 4th-order Yoshida integration with embedded Strang error estimator.
+
+Uses S₄(dt) as propagator and ‖S₄(dt)ψ - S₂(dt)ψ‖/‖ψ‖ as error estimate.
+The difference is dominated by the 3rd-order Strang error, giving a reliable
+measure of splitting error that the L2 estimator misses.
+
+PI controller exponent: (tol/err)^{1/(p+1)} with p=4 (4th-order global).
+Cost: ~4 Strang steps per accepted step; benefits from larger dt at same accuracy.
+"""
+function run_simulation_yoshida!(ws::Workspace{N};
+    adaptive::AdaptiveDtParams=AdaptiveDtParams(),
+    t_end::Float64,
+    save_interval::Float64,
+    callback::Union{Nothing,Function}=nothing,
+) where {N}
+    n_comp = ws.spin_matrices.system.n_components
+    sys = ws.spin_matrices.system
+
+    dt = clamp(adaptive.dt_init, adaptive.dt_min, adaptive.dt_max)
+
+    psi_old = similar(ws.state.psi)
+    psi_strang = similar(ws.state.psi)
+
+    times = Float64[ws.state.t]
+    energies = Float64[total_energy(ws)]
+    norms = Float64[total_norm(ws.state.psi, ws.grid)]
+    mags = Float64[magnetization(ws.state.psi, ws.grid, sys)]
+    snapshots = [copy(ws.state.psi)]
+
+    next_save = ws.state.t + save_interval
+    n_accepted = 0
+    n_rejected = 0
+
+    while ws.state.t < t_end - 1e-14
+        dt_step = min(dt, t_end - ws.state.t)
+        remaining_to_save = next_save - ws.state.t
+        if remaining_to_save > 1e-14 && remaining_to_save < dt_step
+            dt_step = remaining_to_save
+        end
+        dt_step = max(dt_step, adaptive.dt_min)
+
+        is_clamped = dt_step < dt * 0.99
+
+        psi_old .= ws.state.psi
+
+        # Strang step for error estimation
+        _strang_core!(ws, dt_step, n_comp)
+        psi_strang .= ws.state.psi
+
+        # Yoshida step from same initial state
+        ws.state.psi .= psi_old
+        _yoshida_core!(ws, dt_step, n_comp)
+
+        # Embedded error: difference between 4th and 2nd order
+        err = _wavefunction_l2_change(ws.state.psi, psi_strang)
+
+        if !is_clamped && err > adaptive.tol && dt_step > adaptive.dt_min * 1.01
+            ws.state.psi .= psi_old
+            factor = max(0.3, 0.9 * (adaptive.tol / err)^0.2)
+            dt = max(dt_step * factor, adaptive.dt_min)
+            n_rejected += 1
+            continue
+        end
+
+        # Loss after accepted step
+        if ws.loss !== nothing
+            apply_loss_step!(ws.state.psi, ws.loss, sys.F, dt_step, n_comp, N, ws.density_buf)
+        end
+
+        ws.state.t += dt_step
+        ws.state.step += 1
+        n_accepted += 1
+
+        if !is_clamped
+            factor = err > 1e-300 ? min(3.0, 0.9 * (adaptive.tol / err)^0.2) : 3.0
+            dt = clamp(dt * factor, adaptive.dt_min, adaptive.dt_max)
+        end
+
+        if ws.state.t >= next_save - 1e-14
+            E_now = total_energy(ws)
+            nrm_now = total_norm(ws.state.psi, ws.grid)
+            E_per_N = E_now / max(nrm_now, 1e-300)
+            if length(energies) >= 2
+                E_per_N_prev = energies[end] / max(norms[end], 1e-300)
+                de_rel = abs(E_per_N - E_per_N_prev) / max(abs(E_per_N_prev), 1e-300)
+                if de_rel > 0.01
+                    @warn "E/N drift $(round(de_rel*100, digits=2))% between snapshots at t=$(round(ws.state.t, digits=4))"
+                end
+            end
+
+            push!(times, ws.state.t)
+            push!(energies, E_now)
+            push!(norms, nrm_now)
+            push!(mags, magnetization(ws.state.psi, ws.grid, sys))
+            push!(snapshots, copy(ws.state.psi))
+            callback !== nothing && callback(ws, n_accepted)
+            next_save += save_interval
+        end
     end
 
     if isempty(times) || abs(times[end] - ws.state.t) > 1e-12

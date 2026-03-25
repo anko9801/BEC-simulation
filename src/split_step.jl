@@ -78,6 +78,56 @@ function _half_potential_step!(ws::Workspace{N}, dt_half, n_comp, ndim, imaginar
     )
 end
 
+"""
+Yoshida 4th-order triple-jump coefficients.
+S₄(dt) = S₂(w₁·dt) ∘ S₂(w₀·dt) ∘ S₂(w₁·dt)  with w₀ + 2w₁ = 1.
+"""
+const _YOSHIDA_W1 = 1.0 / (2.0 - 2.0^(1 / 3))
+const _YOSHIDA_W0 = 1.0 - 2.0 * _YOSHIDA_W1
+
+"""
+One Strang step with explicit dt (no sim_params dependency).
+V(dt/2) K(dt) V(dt/2).
+"""
+function _strang_core!(ws::Workspace{N}, dt::Float64, n_comp::Int) where {N}
+    _half_potential_step!(ws, dt / 2, n_comp, N, false)
+    _update_kinetic_phase!(ws.kinetic_phase, ws.grid.k_squared, dt)
+    apply_kinetic_step!(ws.state.psi, ws.state.fft_buf, ws.kinetic_phase, ws.fft_plans, n_comp, N)
+    _half_potential_step!(ws, dt / 2, n_comp, N, false)
+    nothing
+end
+
+"""
+One 4th-order Yoshida step with merged boundary V-steps: 4V + 3K stages.
+
+w₀ < 0 causes reverse evolution in the middle substep.
+All operators (kinetic, diagonal, DDI, spin-mixing) are unitary and time-reversible,
+so negative dt is valid.
+"""
+function _yoshida_core!(ws::Workspace{N}, dt::Float64, n_comp::Int) where {N}
+    w1 = _YOSHIDA_W1
+    w0 = _YOSHIDA_W0
+    wm = (w1 + w0) / 2
+
+    _half_potential_step!(ws, w1 * dt / 2, n_comp, N, false)
+
+    _update_kinetic_phase!(ws.kinetic_phase, ws.grid.k_squared, w1 * dt)
+    apply_kinetic_step!(ws.state.psi, ws.state.fft_buf, ws.kinetic_phase, ws.fft_plans, n_comp, N)
+
+    _half_potential_step!(ws, wm * dt, n_comp, N, false)
+
+    _update_kinetic_phase!(ws.kinetic_phase, ws.grid.k_squared, w0 * dt)
+    apply_kinetic_step!(ws.state.psi, ws.state.fft_buf, ws.kinetic_phase, ws.fft_plans, n_comp, N)
+
+    _half_potential_step!(ws, wm * dt, n_comp, N, false)
+
+    _update_kinetic_phase!(ws.kinetic_phase, ws.grid.k_squared, w1 * dt)
+    apply_kinetic_step!(ws.state.psi, ws.state.fft_buf, ws.kinetic_phase, ws.fft_plans, n_comp, N)
+
+    _half_potential_step!(ws, w1 * dt / 2, n_comp, N, false)
+    nothing
+end
+
 function _normalize_psi!(psi, grid, n_components, ndim)
     dV = cell_volume(grid)
     norm_sq = 0.0

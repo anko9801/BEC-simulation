@@ -34,10 +34,10 @@ function _compute_k_squared(k::NTuple{N,Vector{Float64}}, n_points::NTuple{N,Int
     ksq
 end
 
-function make_fft_plans(spatial_shape::NTuple{N,Int}) where {N}
+function make_fft_plans(spatial_shape::NTuple{N,Int}; flags=FFTW.MEASURE) where {N}
     buf = zeros(ComplexF64, spatial_shape)
-    fwd = plan_fft!(buf; flags=FFTW.MEASURE)
-    inv = plan_ifft!(buf; flags=FFTW.MEASURE)
+    fwd = plan_fft!(buf; flags=flags)
+    inv = plan_ifft!(buf; flags=flags)
     FFTPlans(fwd, inv)
 end
 
@@ -47,4 +47,12 @@ end
 
 function n_spatial_points(grid::Grid{N}) where {N}
     prod(grid.config.n_points)
+end
+
+function load_fftw_wisdom(path::AbstractString)
+    isfile(path) && FFTW.import_wisdom(path)
+end
+
+function save_fftw_wisdom(path::AbstractString)
+    FFTW.export_wisdom(path)
 end
