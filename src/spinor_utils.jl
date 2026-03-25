@@ -104,9 +104,9 @@ Falls back to full eigendecomposition for imaginary time.
     v = MVector{D,ComplexF64}(undef)
     w = MVector{D,ComplexF64}(undef)
 
-    # Rz(-α)
+    # Rz(-α): exp(-i m (-α)) = exp(i m α)
     @inbounds for c in 1:D
-        v[c] = cis(-m_vals[c] * alpha) * spinor[c]
+        v[c] = cis(m_vals[c] * alpha) * spinor[c]
     end
 
     # Ry(-β): w = Vt·v with phase, then v = V·w
@@ -138,9 +138,9 @@ Falls back to full eigendecomposition for imaginary time.
         v[i] = s
     end
 
-    # Rz(α)
+    # Rz(α): exp(-i m α)
     @inbounds for c in 1:D
-        v[c] *= cis(m_vals[c] * alpha)
+        v[c] *= cis(-m_vals[c] * alpha)
     end
 
     SVector(v)
