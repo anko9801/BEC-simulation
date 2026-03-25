@@ -38,10 +38,9 @@ function _spin_mixing_loop!(psi, sm, c1, dt_frac, ::Val{D}, n_pts, imaginary_tim
     m_vals_t = ntuple(c -> Float64(F - (c - 1)), Val(D))
     fp_coeffs = ntuple(c -> c == 1 ? 0.0 : sqrt(Ff1 - m_vals_t[c] * (m_vals_t[c] + 1.0)), Val(D))
 
-    eig_Fy = eigen(Hermitian(Matrix(sm.Fy)))
-    V_Fy = eig_Fy.vectors
-    Vt_Fy = Matrix{ComplexF64}(V_Fy')
-    λ_Fy = SVector{D,Float64}(eig_Fy.values)
+    V_Fy = sm.Fy_eigvecs
+    Vt_Fy = sm.Fy_eigvecs_adj
+    λ_Fy = sm.Fy_eigvals
 
     Threads.@threads for I in CartesianIndices(n_pts)
         @inbounds begin

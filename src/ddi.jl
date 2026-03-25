@@ -122,17 +122,16 @@ function apply_ddi_step!(
     ndim::Int;
     imaginary_time::Bool=false,
 ) where {D,N}
-    n_pts = ntuple(d -> size(psi, d), ndim)
+    n_pts = ntuple(d -> size(psi, d), Val(N))
 
     @timeit_debug TIMER "ddi_convolve" _compute_and_convolve_ddi!(psi, sm, ddi, bufs, plans, Val(D), ndim, n_pts)
 
     F = sm.system.F
     m_vals = SVector{D,Float64}(ntuple(c -> F - (c - 1), Val(D)))
 
-    eig_Fy = eigen(Hermitian(Matrix(sm.Fy)))
-    V_Fy = eig_Fy.vectors
-    Vt_Fy = Matrix{ComplexF64}(V_Fy')
-    λ_Fy = SVector{D,Float64}(eig_Fy.values)
+    V_Fy = sm.Fy_eigvecs
+    Vt_Fy = sm.Fy_eigvecs_adj
+    λ_Fy = sm.Fy_eigvals
 
     @timeit_debug TIMER "ddi_rotation" Threads.@threads for I in CartesianIndices(n_pts)
         @inbounds begin

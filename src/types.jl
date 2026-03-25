@@ -55,6 +55,9 @@ struct SpinMatrices{D,M<:SMatrix}
     Fm::M
     F_dot_F::M
     system::SpinSystem
+    Fy_eigvecs::Matrix{ComplexF64}
+    Fy_eigvecs_adj::Matrix{ComplexF64}
+    Fy_eigvals::SVector{D,Float64}
 end
 
 # --- Atom Species ---

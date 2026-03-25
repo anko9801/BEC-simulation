@@ -35,6 +35,11 @@ function spin_matrices(F::Int)
     Fm = SMatrix{n,n,ComplexF64}(Fm_dense)
     FdF = SMatrix{n,n,ComplexF64}(F_dot_F_dense)
 
+    eig_Fy = eigen(Hermitian(Fy_dense))
+    V_Fy = Matrix{ComplexF64}(eig_Fy.vectors)
+    Vt_Fy = Matrix{ComplexF64}(eig_Fy.vectors')
+    λ_Fy = SVector{n,Float64}(eig_Fy.values)
+
     M = typeof(Fx)
-    SpinMatrices{n,M}(Fx, Fy, Fz, Fp, Fm, FdF, sys)
+    SpinMatrices{n,M}(Fx, Fy, Fz, Fp, Fm, FdF, sys, V_Fy, Vt_Fy, λ_Fy)
 end
