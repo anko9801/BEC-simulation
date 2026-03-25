@@ -105,8 +105,8 @@ At each point: spinor → Majorana stars → sphere points → Steinhardt Q₆.
 Returns `Array{Float64,N}` (0 everywhere for F < 6).
 """
 function icosahedral_order_parameter(psi::AbstractArray{ComplexF64}, grid::Grid{N},
-                                     sm::SpinMatrices;
-                                     density_cutoff::Float64=1e-10) where {N}
+                                     sm::SpinMatrices{D};
+                                     density_cutoff::Float64=1e-10) where {D,N}
     F = sm.system.F
     n_comp = sm.system.n_components
     n_pts = ntuple(d -> size(psi, d), N)
@@ -117,9 +117,9 @@ function icosahedral_order_parameter(psi::AbstractArray{ComplexF64}, grid::Grid{
 
     @inbounds for I in CartesianIndices(n_pts)
         n[I] > density_cutoff || continue
-        spinor = _get_spinor(psi, I, n_comp)
+        spinor = _get_spinor(psi, I, Val(D))
         inv_norm = 1.0 / sqrt(real(dot(spinor, spinor)))
-        spinor_normed = SVector{n_comp,ComplexF64}(spinor .* inv_norm)
+        spinor_normed = SVector{D,ComplexF64}(spinor .* inv_norm)
 
         stars = majorana_stars(Vector{ComplexF64}(spinor_normed), F)
         points = [_stereo_to_sphere(z) for z in stars]

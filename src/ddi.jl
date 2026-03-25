@@ -48,6 +48,38 @@ function make_ddi_buffers(n_pts::NTuple{N,Int}) where {N}
 end
 
 """
+Compute spin density directly into ComplexF64 k-buffers, FFT, and fused tensor contraction.
+Skips the Float64→ComplexF64 copy and fuses 3 broadcast contractions into one loop.
+"""
+function _compute_and_convolve_ddi!(
+    psi, sm, ddi::DDIParams{N}, bufs::DDIBuffers{N}, plans::FFTPlans,
+    ::Val{D}, ndim, n_pts,
+) where {D,N}
+    _compute_spin_density!(bufs.Fx_k, bufs.Fy_k, bufs.Fz_k, psi, sm, Val(D), ndim, n_pts)
+
+    plans.forward * bufs.Fx_k
+    plans.forward * bufs.Fy_k
+    plans.forward * bufs.Fz_k
+
+    C = ddi.C_dd
+    Threads.@threads for I in CartesianIndices(n_pts)
+        @inbounds begin
+            fk_x = bufs.Fx_k[I]
+            fk_y = bufs.Fy_k[I]
+            fk_z = bufs.Fz_k[I]
+            bufs.Phi_x[I] = C * (ddi.Q_xx[I] * fk_x + ddi.Q_xy[I] * fk_y + ddi.Q_xz[I] * fk_z)
+            bufs.Phi_y[I] = C * (ddi.Q_xy[I] * fk_x + ddi.Q_yy[I] * fk_y + ddi.Q_yz[I] * fk_z)
+            bufs.Phi_z[I] = C * (ddi.Q_xz[I] * fk_x + ddi.Q_yz[I] * fk_y + ddi.Q_zz[I] * fk_z)
+        end
+    end
+
+    plans.inverse * bufs.Phi_x
+    plans.inverse * bufs.Phi_y
+    plans.inverse * bufs.Phi_z
+    nothing
+end
+
+"""
 Compute DDI potential Φ_α(r) via k-space convolution.
 Writes result into bufs.Phi_x, Phi_y, Phi_z (complex, imaginary part ~ 0).
 
@@ -90,100 +122,30 @@ function apply_ddi_step!(
     ndim::Int;
     imaginary_time::Bool=false,
 ) where {D,N}
-    n_comp = sm.system.n_components
     n_pts = ntuple(d -> size(psi, d), ndim)
 
-    _compute_spin_density!(bufs.Fx_r, bufs.Fy_r, bufs.Fz_r, psi, sm, n_comp, ndim, n_pts)
-    compute_ddi_potential!(ddi, bufs, plans)
+    @timeit_debug TIMER "ddi_convolve" _compute_and_convolve_ddi!(psi, sm, ddi, bufs, plans, Val(D), ndim, n_pts)
 
     F = sm.system.F
     m_vals = SVector{D,Float64}(ntuple(c -> F - (c - 1), Val(D)))
 
-    # Precompute Fy eigendecomposition once (O(D³) done once, not per grid point)
-    eig_Fy = eigen(Hermitian(sm.Fy))
-    V_Fy = SMatrix{D,D,ComplexF64}(eig_Fy.vectors)
-    Vt_Fy = V_Fy'
+    eig_Fy = eigen(Hermitian(Matrix(sm.Fy)))
+    V_Fy = eig_Fy.vectors
+    Vt_Fy = Matrix{ComplexF64}(V_Fy')
     λ_Fy = SVector{D,Float64}(eig_Fy.values)
 
-    @inbounds for I in CartesianIndices(n_pts)
-        phi_x = real(bufs.Phi_x[I])
-        phi_y = real(bufs.Phi_y[I])
-        phi_z = real(bufs.Phi_z[I])
+    @timeit_debug TIMER "ddi_rotation" Threads.@threads for I in CartesianIndices(n_pts)
+        @inbounds begin
+            phi_x = real(bufs.Phi_x[I])
+            phi_y = real(bufs.Phi_y[I])
+            phi_z = real(bufs.Phi_z[I])
 
-        spinor = _get_spinor(psi, I, n_comp)
-        new_spinor = _apply_spin_rotation(spinor, phi_x, phi_y, phi_z,
-                                          dt_frac, F, m_vals, V_Fy, Vt_Fy, λ_Fy, sm, imaginary_time)
-        _set_spinor!(psi, I, new_spinor, n_comp)
+            spinor = _get_spinor(psi, I, Val(D))
+            new_spinor = _apply_euler_spin_rotation(spinor, phi_x, phi_y, phi_z,
+                                              dt_frac, F, m_vals, V_Fy, Vt_Fy, λ_Fy, sm, imaginary_time)
+            _set_spinor!(psi, I, new_spinor, Val(D))
+        end
     end
     nothing
 end
 
-"""
-Apply exp(-i dt (phi·F)) to a spinor without per-point eigendecomposition.
-
-Since H = phi·F has eigenvalues m*|phi|, we decompose into:
-  exp(-iθ n̂·F) = Rz(α) Ry(β) Dz(θ) Ry(-β) Rz(-α)
-where (α, β) are spherical angles of phi, θ = |phi|*dt,
-Dz(θ) = diag(exp(-i m θ)), and Ry uses a precomputed Wigner rotation.
-
-Falls back to full eigendecomposition for imaginary time.
-"""
-@inline function _apply_spin_rotation(
-    spinor::SVector{D,ComplexF64}, phi_x, phi_y, phi_z,
-    dt, F, m_vals::SVector{D,Float64},
-    V_Fy::SMatrix{D,D,ComplexF64}, Vt_Fy::SMatrix{D,D,ComplexF64},
-    λ_Fy::SVector{D,Float64},
-    sm::SpinMatrices, imaginary_time::Bool,
-) where {D}
-    phi_mag = sqrt(phi_x^2 + phi_y^2 + phi_z^2)
-    if phi_mag < 1e-15
-        return spinor
-    end
-
-    if imaginary_time
-        H_ddi = phi_x * sm.Fx + phi_y * sm.Fy + phi_z * sm.Fz
-        U = _exp_i_hermitian(SMatrix{D,D,ComplexF64}(H_ddi), dt, true)
-        return U * spinor
-    end
-
-    beta = acos(clamp(phi_z / phi_mag, -1.0, 1.0))
-    alpha = atan(phi_y, phi_x)
-    theta = phi_mag * dt
-
-    # Rz(-α): diagonal
-    v = SVector{D,ComplexF64}(ntuple(Val(D)) do c
-        @inbounds cis(-m_vals[c] * alpha) * spinor[c]
-    end)
-
-    # Ry(-β) via exp(iβ Fy) using precomputed eigendecomp
-    v = _apply_exp_i_Fy(V_Fy, Vt_Fy, λ_Fy, beta, v)
-
-    # Dz(θ): diagonal exp(-i m θ)
-    v = SVector{D,ComplexF64}(ntuple(Val(D)) do c
-        @inbounds cis(-m_vals[c] * theta) * v[c]
-    end)
-
-    # Ry(β) via exp(-iβ Fy) using precomputed eigendecomp
-    v = _apply_exp_i_Fy(V_Fy, Vt_Fy, λ_Fy, -beta, v)
-
-    # Rz(α): diagonal
-    SVector{D,ComplexF64}(ntuple(Val(D)) do c
-        @inbounds cis(m_vals[c] * alpha) * v[c]
-    end)
-end
-
-"""
-Apply exp(iβ Fy) to vector v using precomputed Fy eigendecomposition.
-O(D²) per call instead of O(D³) eigendecomposition.
-"""
-@inline function _apply_exp_i_Fy(
-    V::SMatrix{D,D,ComplexF64}, Vt::SMatrix{D,D,ComplexF64},
-    λ::SVector{D,Float64}, beta::Float64,
-    v::SVector{D,ComplexF64},
-) where {D}
-    w = Vt * v
-    w = SVector{D,ComplexF64}(ntuple(Val(D)) do i
-        @inbounds cis(beta * λ[i]) * w[i]
-    end)
-    V * w
-end

@@ -16,17 +16,17 @@ function split_step!(ws::Workspace{N}) where {N}
     it = ws.sim_params.imaginary_time
     n_comp = ws.spin_matrices.system.n_components
 
-    _half_potential_step!(ws, dt / 2, n_comp, N, it)
+    @timeit_debug TIMER "half_potential" _half_potential_step!(ws, dt / 2, n_comp, N, it)
 
-    apply_kinetic_step!(
+    @timeit_debug TIMER "kinetic" apply_kinetic_step!(
         ws.state.psi, ws.state.fft_buf, ws.kinetic_phase,
         ws.fft_plans, n_comp, N,
     )
 
-    _half_potential_step!(ws, dt / 2, n_comp, N, it)
+    @timeit_debug TIMER "half_potential" _half_potential_step!(ws, dt / 2, n_comp, N, it)
 
     if !it && ws.loss !== nothing
-        apply_loss_step!(ws.state.psi, ws.loss, ws.spin_matrices.system.F, dt, n_comp, N)
+        @timeit_debug TIMER "loss" apply_loss_step!(ws.state.psi, ws.loss, ws.spin_matrices.system.F, dt, n_comp, N, ws.density_buf)
     end
 
     ws.state.t += it ? 0.0 : dt
@@ -43,22 +43,21 @@ end
 
 function _half_potential_step!(ws::Workspace{N}, dt_half, n_comp, ndim, imaginary_time) where {N}
     zee = zeeman_at(ws.zeeman, ws.state.t)
-    zeeman_diag = zeeman_diagonal(zee, ws.spin_matrices.system)
+    zeeman_diag = zeeman_diagonal(zee, ws.spin_matrices)
 
-    apply_diagonal_potential_step!(
-        ws.state.psi, ws.potential_values, zeeman_diag,
-        ws.interactions.c0, dt_half / 2, n_comp, ndim, ws.density_buf;
-        imaginary_time,
+    @timeit_debug TIMER "diagonal" _diagonal_step_svec!(
+        Val(N), ws.state.psi, ws.potential_values, zeeman_diag,
+        ws.interactions.c0, dt_half / 2, ws.density_buf, imaginary_time,
     )
 
-    apply_spin_mixing_step!(
+    @timeit_debug TIMER "spin_mixing" apply_spin_mixing_step!(
         ws.state.psi, ws.spin_matrices, ws.interactions.c1,
         dt_half, ndim;
         imaginary_time,
     )
 
     if ws.ddi !== nothing
-        apply_ddi_step!(
+        @timeit_debug TIMER "ddi" apply_ddi_step!(
             ws.state.psi, ws.spin_matrices, ws.ddi, ws.ddi_bufs,
             ws.fft_plans, dt_half, ndim;
             imaginary_time,
@@ -66,17 +65,16 @@ function _half_potential_step!(ws::Workspace{N}, dt_half, n_comp, ndim, imaginar
     end
 
     if ws.raman !== nothing
-        apply_raman_step!(
+        @timeit_debug TIMER "raman" apply_raman_step!(
             ws.state.psi, ws.spin_matrices, ws.raman,
             ws.grid, dt_half;
             imaginary_time,
         )
     end
 
-    apply_diagonal_potential_step!(
-        ws.state.psi, ws.potential_values, zeeman_diag,
-        ws.interactions.c0, dt_half / 2, n_comp, ndim, ws.density_buf;
-        imaginary_time,
+    @timeit_debug TIMER "diagonal" _diagonal_step_svec!(
+        Val(N), ws.state.psi, ws.potential_values, zeeman_diag,
+        ws.interactions.c0, dt_half / 2, ws.density_buf, imaginary_time,
     )
 end
 

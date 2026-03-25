@@ -6,6 +6,9 @@ using FFTW
 using JLD2
 using YAML
 using Unitful
+using TimerOutputs
+
+const TIMER = TimerOutput()
 
 include("types.jl")
 include("units.jl")
@@ -123,6 +126,22 @@ export load_experiment, load_experiment_from_string, run_experiment
 
 # Units
 export Units
+
+# Tracing
+export TIMER, enable_tracing!, disable_tracing!, reset_tracing!
+
+function enable_tracing!()
+    TimerOutputs.enable_debug_timings(SpinorBEC)
+    enable_timer!(TIMER)
+end
+
+function disable_tracing!()
+    disable_timer!(TIMER)
+end
+
+function reset_tracing!()
+    TimerOutputs.reset_timer!(TIMER)
+end
 
 # Visualization (defined in extension, exported here for discoverability)
 function plot_density end

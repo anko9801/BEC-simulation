@@ -34,15 +34,14 @@ end
 Local spin density vector (Fx, Fy, Fz) at each spatial point.
 Returns a tuple of 3 arrays.
 """
-function spin_density_vector(psi::AbstractArray{ComplexF64}, sm::SpinMatrices, ndim::Int)
-    n_comp = sm.system.n_components
+function spin_density_vector(psi::AbstractArray{ComplexF64}, sm::SpinMatrices{D}, ndim::Int) where {D}
     n_pts = ntuple(d -> size(psi, d), ndim)
 
     fx = zeros(Float64, n_pts)
     fy = zeros(Float64, n_pts)
     fz = zeros(Float64, n_pts)
 
-    _compute_spin_density!(fx, fy, fz, psi, sm, n_comp, ndim, n_pts)
+    _compute_spin_density!(fx, fy, fz, psi, sm, Val(D), ndim, n_pts)
 
     (fx, fy, fz)
 end
@@ -55,28 +54,34 @@ Exploit spin matrix sparsity: Fz is diagonal, Fx/Fy are tridiagonal.
 
 O(D) per point instead of O(D²).
 """
-function _compute_spin_density!(fx, fy, fz, psi, sm, n_comp, ndim, n_pts)
+function _compute_spin_density!(fx, fy, fz, psi, sm, n_comp::Int, ndim, n_pts)
+    _compute_spin_density!(fx, fy, fz, psi, sm, Val(n_comp), ndim, n_pts)
+end
+
+function _compute_spin_density!(fx, fy, fz, psi, sm, ::Val{D}, ndim, n_pts) where {D}
     F = sm.system.F
     Ff1 = Float64(F * (F + 1))
-    m_vals = ntuple(c -> Float64(F - (c - 1)), n_comp)
-    fp_coeffs = ntuple(c -> c == 1 ? 0.0 : sqrt(Ff1 - m_vals[c] * (m_vals[c] + 1.0)), n_comp)
+    m_vals = ntuple(c -> Float64(F - (c - 1)), Val(D))
+    fp_coeffs = ntuple(c -> c == 1 ? 0.0 : sqrt(Ff1 - m_vals[c] * (m_vals[c] + 1.0)), Val(D))
 
-    @inbounds for I in CartesianIndices(n_pts)
-        fz_val = 0.0
-        for c in 1:n_comp
-            fz_val += m_vals[c] * abs2(psi[I, c])
-        end
-        fz[I] = fz_val
+    Threads.@threads for I in CartesianIndices(n_pts)
+        @inbounds begin
+            fz_val = 0.0
+            for c in 1:D
+                fz_val += m_vals[c] * abs2(psi[I, c])
+            end
+            fz[I] = fz_val
 
-        fxy_re = 0.0
-        fxy_im = 0.0
-        for c in 2:n_comp
-            prod = conj(psi[I, c - 1]) * psi[I, c]
-            fxy_re += fp_coeffs[c] * real(prod)
-            fxy_im += fp_coeffs[c] * imag(prod)
+            fxy_re = 0.0
+            fxy_im = 0.0
+            for c in 2:D
+                prod = conj(psi[I, c - 1]) * psi[I, c]
+                fxy_re += fp_coeffs[c] * real(prod)
+                fxy_im += fp_coeffs[c] * imag(prod)
+            end
+            fx[I] = fxy_re
+            fy[I] = fxy_im
         end
-        fx[I] = fxy_re
-        fy[I] = fxy_im
     end
 end
 
@@ -148,8 +153,8 @@ function _spin_interaction_energy(psi, sm, c1, n_comp, ndim, n_pts, dV)
     0.5 * c1 * sum(fx .^ 2 .+ fy .^ 2 .+ fz .^ 2) * dV
 end
 
-function _ddi_energy(psi, sm, ddi, ddi_bufs, plans, n_comp, ndim, n_pts, dV)
-    _compute_spin_density!(ddi_bufs.Fx_r, ddi_bufs.Fy_r, ddi_bufs.Fz_r, psi, sm, n_comp, ndim, n_pts)
+function _ddi_energy(psi, sm::SpinMatrices{D}, ddi, ddi_bufs, plans, n_comp, ndim, n_pts, dV) where {D}
+    _compute_spin_density!(ddi_bufs.Fx_r, ddi_bufs.Fy_r, ddi_bufs.Fz_r, psi, sm, Val(D), ndim, n_pts)
     compute_ddi_potential!(ddi, ddi_bufs, plans)
     E = 0.0
     @inbounds for I in CartesianIndices(n_pts)

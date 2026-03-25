@@ -230,21 +230,21 @@ end
 
 # --- Workspace ---
 
-struct Workspace{N,A,P,IP}
+struct Workspace{N,A,P,IP,SM<:SpinMatrices,ZEE,DDI,DDIB,RAM,LOSS}
     state::SimState{N,A}
     fft_plans::FFTPlans{P,IP}
     kinetic_phase::Array{ComplexF64,N}
     potential_values::Array{Float64,N}
     density_buf::Array{Float64,N}
-    spin_matrices::SpinMatrices
+    spin_matrices::SM
     grid::Grid{N}
     atom::AtomSpecies
     interactions::InteractionParams
-    zeeman::Union{ZeemanParams,TimeDependentZeeman}
+    zeeman::ZEE
     potential::AbstractPotential
     sim_params::SimParams
-    ddi::Union{Nothing,DDIParams{N}}
-    ddi_bufs::Union{Nothing,DDIBuffers{N}}
-    raman::Union{Nothing,RamanCoupling{N}}
-    loss::Union{Nothing,LossParams}
+    ddi::DDI
+    ddi_bufs::DDIB
+    raman::RAM
+    loss::LOSS
 end

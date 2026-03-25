@@ -1,61 +1,75 @@
 function apply_spin_mixing_step!(
     psi::AbstractArray{ComplexF64},
-    sm::SpinMatrices,
+    sm::SpinMatrices{D},
     c1::Float64,
     dt_frac::Float64,
     ndim::Int;
     imaginary_time::Bool=false,
-)
+) where {D}
     abs(c1) < 1e-30 && return nothing
-    n_comp = sm.system.n_components
     n_pts = ntuple(d -> size(psi, d), ndim)
 
-    _spin_mixing_loop!(psi, sm, c1, dt_frac, n_comp, ndim, n_pts, imaginary_time)
+    _spin_mixing_loop!(psi, sm, c1, dt_frac, Val(D), n_pts, imaginary_time)
     nothing
 end
 
-function _spin_mixing_loop!(psi, sm, c1, dt_frac, n_comp, ndim, n_pts, imaginary_time)
-    @inbounds for I in CartesianIndices(n_pts)
-        spinor = _get_spinor(psi, I, n_comp)
-        new_spinor = _apply_spin_rotation(spinor, sm, c1, dt_frac, imaginary_time)
-        _set_spinor!(psi, I, new_spinor, n_comp)
+"""
+Spin-1 loop using Rodrigues' formula (allocation-free, machine-precision unitarity).
+"""
+function _spin_mixing_loop!(psi, sm, c1, dt_frac, ::Val{3}, n_pts, imaginary_time)
+    Threads.@threads for I in CartesianIndices(n_pts)
+        @inbounds begin
+            spinor = _get_spinor(psi, I, Val(3))
+            new_spinor = _apply_rodrigues_rotation(spinor, sm, c1, dt_frac, imaginary_time)
+            _set_spinor!(psi, I, new_spinor, Val(3))
+        end
     end
 end
 
 """
-Apply exp(-i c1 (F_local · F) dt) to a single spinor.
-H_spin = c1 * (⟨Fx⟩ Fx + ⟨Fy⟩ Fy + ⟨Fz⟩ Fz) is Hermitian.
-Real time:      U = exp(-i H_spin dt)
-Imaginary time: U = exp(-H_spin dt)
-
-For spin-1 (D=3), uses Rodrigues' formula (allocation-free).
-For higher spins, falls back to eigendecomposition.
+Generic spin-F loop using Euler angle decomposition.
+O(D) spin expectation via raising/lowering, O(D²) rotation via Euler angles.
+Uses Matrix (not SMatrix) for V_Fy to avoid heap allocation at large D.
 """
-function _apply_spin_rotation(
-    spinor::SVector{D,ComplexF64},
-    sm::SpinMatrices{D},
-    c1::Float64,
-    dt_frac::Float64,
-    imaginary_time::Bool,
-) where {D}
-    fx = real(dot(spinor, sm.Fx * spinor))
-    fy = real(dot(spinor, sm.Fy * spinor))
-    fz = real(dot(spinor, sm.Fz * spinor))
+function _spin_mixing_loop!(psi, sm, c1, dt_frac, ::Val{D}, n_pts, imaginary_time) where {D}
+    F = sm.system.F
+    Ff1 = Float64(F * (F + 1))
+    m_vals = SVector{D,Float64}(ntuple(c -> F - (c - 1), Val(D)))
+    m_vals_t = ntuple(c -> Float64(F - (c - 1)), Val(D))
+    fp_coeffs = ntuple(c -> c == 1 ? 0.0 : sqrt(Ff1 - m_vals_t[c] * (m_vals_t[c] + 1.0)), Val(D))
 
-    H_spin = c1 * (fx * sm.Fx + fy * sm.Fy + fz * sm.Fz)
+    eig_Fy = eigen(Hermitian(Matrix(sm.Fy)))
+    V_Fy = eig_Fy.vectors
+    Vt_Fy = Matrix{ComplexF64}(V_Fy')
+    λ_Fy = SVector{D,Float64}(eig_Fy.values)
 
-    U = _exp_i_hermitian(SMatrix{D,D,ComplexF64}(H_spin), dt_frac, imaginary_time)
-    U * spinor
+    Threads.@threads for I in CartesianIndices(n_pts)
+        @inbounds begin
+            spinor = _get_spinor(psi, I, Val(D))
+
+            fz_val = 0.0
+            for c in 1:D
+                fz_val += m_vals_t[c] * abs2(spinor[c])
+            end
+            fxy_re = 0.0
+            fxy_im = 0.0
+            for c in 2:D
+                prod = conj(spinor[c-1]) * spinor[c]
+                fxy_re += fp_coeffs[c] * real(prod)
+                fxy_im += fp_coeffs[c] * imag(prod)
+            end
+
+            new_spinor = _apply_euler_spin_rotation(spinor, c1 * fxy_re, c1 * fxy_im, c1 * fz_val,
+                dt_frac, F, m_vals, V_Fy, Vt_Fy, λ_Fy, sm, imaginary_time)
+            _set_spinor!(psi, I, new_spinor, Val(D))
+        end
+    end
 end
 
 """
-Spin-1 specialization using Rodrigues' formula.
-
-For H = c1*|f⃗|*(n̂·F⃗), eigenvalues are c1*|f⃗|*{-1,0,1}.
-exp(-iθ(n̂·F⃗)) = I - i·sin(θ)·(n̂·F⃗) + (cos(θ)-1)·(n̂·F⃗)²
-exp(-θ(n̂·F⃗))  = I - sinh(θ)·(n̂·F⃗) + (cosh(θ)-1)·(n̂·F⃗)²
+Spin-1 Rodrigues' formula: exp(-iθ(n̂·F)) = I - i sin(θ)(n̂·F) + (cos(θ)-1)(n̂·F)²
 """
-function _apply_spin_rotation(
+function _apply_rodrigues_rotation(
     spinor::SVector{3,ComplexF64},
     sm::SpinMatrices{3},
     c1::Float64,

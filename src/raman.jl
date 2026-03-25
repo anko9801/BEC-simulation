@@ -13,7 +13,6 @@ function apply_raman_step!(
     dt_frac::Float64;
     imaginary_time::Bool=false,
 ) where {D,N}
-    n_comp = sm.system.n_components
     n_pts = ntuple(d -> size(psi, d), N)
 
     @inbounds for I in CartesianIndices(n_pts)
@@ -25,8 +24,8 @@ function apply_raman_step!(
 
         U = _exp_i_hermitian(SMatrix{D,D,ComplexF64}(H_R), dt_frac, imaginary_time)
 
-        spinor = _get_spinor(psi, I, n_comp)
-        _set_spinor!(psi, I, U * spinor, n_comp)
+        spinor = _get_spinor(psi, I, Val(D))
+        _set_spinor!(psi, I, U * spinor, Val(D))
     end
     nothing
 end
