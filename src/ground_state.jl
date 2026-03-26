@@ -28,6 +28,7 @@ function find_ground_state(;
     psi_init=nothing,
     enable_ddi::Bool=false,
     c_dd::Float64=NaN,
+    secular_ddi::Bool=false,
     adaptive_dt::Bool=false,
     dt_max::Float64=10.0 * dt,
     fft_flags=FFTW.MEASURE,
@@ -44,12 +45,12 @@ function find_ground_state(;
     if adaptive_dt
         return _find_ground_state_adaptive(;
             grid, atom, interactions, zeeman, potential,
-            dt, n_steps, tol, psi0, enable_ddi, c_dd, dt_max, fft_flags,
+            dt, n_steps, tol, psi0, enable_ddi, c_dd, secular_ddi, dt_max, fft_flags,
         )
     end
 
     sp = SimParams(; dt, n_steps, imaginary_time=true, normalize_every=1, save_every=max(1, n_steps ÷ 10))
-    ws = make_workspace(; grid, atom, interactions, zeeman, potential, sim_params=sp, psi_init=psi0, enable_ddi, c_dd, fft_flags)
+    ws = make_workspace(; grid, atom, interactions, zeeman, potential, sim_params=sp, psi_init=psi0, enable_ddi, c_dd, secular_ddi, fft_flags)
 
     E_prev = total_energy(ws)
     converged = false
@@ -79,7 +80,7 @@ Strategy: run check_every steps, then evaluate energy.
 """
 function _find_ground_state_adaptive(;
     grid, atom, interactions, zeeman, potential,
-    dt, n_steps, tol, psi0, enable_ddi, c_dd, dt_max, fft_flags=FFTW.MEASURE,
+    dt, n_steps, tol, psi0, enable_ddi, c_dd, secular_ddi=false, dt_max, fft_flags=FFTW.MEASURE,
 )
     current_dt = dt
     check_every = max(1, n_steps ÷ 100)
@@ -89,7 +90,7 @@ function _find_ground_state_adaptive(;
     sp = SimParams(; dt=current_dt, n_steps=check_every, imaginary_time=true,
                    normalize_every=1, save_every=check_every)
     ws = make_workspace(; grid, atom, interactions, zeeman, potential,
-                        sim_params=sp, psi_init=psi_current, enable_ddi, c_dd, fft_flags)
+                        sim_params=sp, psi_init=psi_current, enable_ddi, c_dd, secular_ddi, fft_flags)
     E_prev = total_energy(ws)
     converged = false
     total_steps = 0

@@ -73,6 +73,12 @@ function _half_potential_step!(ws::Workspace{N}, dt_half, n_comp, ndim, imaginar
         end
     end
 
+    @timeit_debug TIMER "nematic" apply_nematic_step!(
+        ws.state.psi, ws.interactions, ws.spin_matrices.system.F,
+        dt_half, ndim;
+        imaginary_time,
+    )
+
     if ws.raman !== nothing
         @timeit_debug TIMER "raman" apply_raman_step!(
             ws.state.psi, ws.spin_matrices, ws.raman,

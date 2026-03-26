@@ -44,9 +44,10 @@ end
 struct DDIConfig
     enabled::Bool
     c_dd::Union{Nothing,Float64}
+    secular::Bool
 end
 
-DDIConfig() = DDIConfig(false, nothing)
+DDIConfig() = DDIConfig(false, nothing, false)
 
 struct SystemConfig
     atom_name::Symbol
@@ -129,7 +130,8 @@ function _parse_system(d::Dict)
         dd = d["ddi"]
         enabled = get(dd, "enabled", false)
         c_dd = haskey(dd, "c_dd") ? Float64(dd["c_dd"]) : nothing
-        DDIConfig(enabled, c_dd)
+        secular = Bool(get(dd, "secular", false))
+        DDIConfig(enabled, c_dd, secular)
     else
         DDIConfig()
     end

@@ -10,7 +10,8 @@ println("a_ho=$(round(EU_a_ho*1e6; digits=3)) μm, 1ms=$(round(1e-3/EU_t_unit; d
 # --- Setup ---
 const c1 = 0.0  # Eu151: a_F unknown, DDI dominates
 atom = AtomSpecies("Eu151", 1.0, 6, EU_a_s_dl, 0.0)
-grid = make_grid(GridConfig((32, 32, 32), (20.0, 20.0, 20.0)))
+const N_GRID = parse(Int, get(ENV, "SG_GRID", "64"))
+grid = make_grid(GridConfig((N_GRID, N_GRID, N_GRID), (20.0, 20.0, 20.0)))
 interactions = InteractionParams(EU_c0, c1)
 trap = HarmonicTrap((1.0, 1.0, EU_λ_z))
 sys = SpinSystem(atom.F)
@@ -211,7 +212,7 @@ html = """
       Spin-polarized m<sub>F</sub>=+6 BEC quenched to B = 2.6 nT.
       DDI drives spin relaxation with Einstein-de Haas mass circulation.</p>
       <p style="margin-top:6px">c<sub>0</sub> &approx; 4689, c<sub>1</sub> = c<sub>0</sub>/36,
-      c<sub>dd</sub> &approx; 609, &epsilon;<sub>dd</sub> &approx; 0.55</p>
+      c<sub>dd</sub> &approx; 7647, &epsilon;<sub>dd</sub> &approx; 0.55</p>
     </div>
   </div>
 </div>

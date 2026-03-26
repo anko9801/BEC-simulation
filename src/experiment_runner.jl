@@ -61,6 +61,7 @@ function run_experiment(config::ExperimentConfig; verbose::Bool=true)
 
     enable_ddi = sys_cfg.ddi.enabled
     c_dd_val = sys_cfg.ddi.c_dd === nothing ? NaN : sys_cfg.ddi.c_dd
+    secular_ddi = sys_cfg.ddi.secular
 
     gs_energy = nothing
     gs_converged = nothing
@@ -83,6 +84,7 @@ function run_experiment(config::ExperimentConfig; verbose::Bool=true)
             initial_state=gs.initial_state,
             enable_ddi=gs.enable_ddi,
             c_dd=c_dd_val,
+            secular_ddi,
         )
 
         gs_energy = result.energy
@@ -118,6 +120,7 @@ function run_experiment(config::ExperimentConfig; verbose::Bool=true)
             psi_init=psi_current,
             enable_ddi,
             c_dd=c_dd_val,
+            secular_ddi,
             loss=sys_cfg.loss,
         )
         ws.state.t = t_offset

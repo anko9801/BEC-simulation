@@ -105,6 +105,86 @@
         @test abs(N1 - N0) / N0 < 1e-10
     end
 
+    @testset "Secular DDI Q tensor" begin
+        config = GridConfig((16, 16, 16), (10.0, 10.0, 10.0))
+        grid = make_grid(config)
+        ddi_sec = make_ddi_params(grid, Eu151; secular=true)
+        ddi_full = make_ddi_params(grid, Eu151; secular=false)
+
+        # Off-diagonal components vanish in secular approximation
+        @test maximum(abs, ddi_sec.Q_xy) == 0.0
+        @test maximum(abs, ddi_sec.Q_xz) == 0.0
+        @test maximum(abs, ddi_sec.Q_yz) == 0.0
+
+        # Q_zz is unchanged
+        @test ddi_sec.Q_zz ≈ ddi_full.Q_zz
+
+        # Q_xx = Q_yy = -Q_zz/2
+        @test ddi_sec.Q_xx ≈ ddi_sec.Q_yy
+        @test ddi_sec.Q_xx ≈ -ddi_sec.Q_zz ./ 2.0
+
+        # Still traceless
+        trace = ddi_sec.Q_xx .+ ddi_sec.Q_yy .+ ddi_sec.Q_zz
+        for I in CartesianIndices(size(trace))
+            if grid.k_squared[I] > 0.0
+                @test abs(trace[I]) < 1e-12
+            end
+        end
+    end
+
+    @testset "Secular DDI norm conservation (3D)" begin
+        config = GridConfig((16, 16, 16), (10.0, 10.0, 10.0))
+        grid = make_grid(config)
+        sys = SpinSystem(1)
+        sm = spin_matrices(1)
+        psi = init_psi(grid, sys; state=:uniform)
+        ddi = make_ddi_params(grid, Eu151; secular=true)
+        bufs = make_ddi_buffers(grid.config.n_points)
+        plans = make_fft_plans(grid.config.n_points)
+
+        N0 = total_norm(psi, grid)
+        apply_ddi_step!(psi, sm, ddi, bufs, plans, 0.001, 3; imaginary_time=false)
+        N1 = total_norm(psi, grid)
+
+        @test abs(N1 - N0) / N0 < 1e-10
+    end
+
+    @testset "Secular DDI: z-polarized state same as full" begin
+        config = GridConfig((16, 16, 16), (10.0, 10.0, 10.0))
+        grid = make_grid(config)
+        sys = SpinSystem(1)
+        sm = spin_matrices(1)
+        plans = make_fft_plans(grid.config.n_points)
+
+        # Ferromagnetic state along z: F_x = F_y = 0, only F_z nonzero
+        # Secular and full DDI should give identical Phi_z
+        psi = init_psi(grid, sys; state=:ferromagnetic)
+
+        ddi_full = make_ddi_params(grid, Eu151; secular=false)
+        bufs_full = make_ddi_buffers(grid.config.n_points)
+        psi_full = copy(psi)
+        apply_ddi_step!(psi_full, sm, ddi_full, bufs_full, plans, 0.001, 3; imaginary_time=false)
+
+        ddi_sec = make_ddi_params(grid, Eu151; secular=true)
+        bufs_sec = make_ddi_buffers(grid.config.n_points)
+        psi_sec = copy(psi)
+        apply_ddi_step!(psi_sec, sm, ddi_sec, bufs_sec, plans, 0.001, 3; imaginary_time=false)
+
+        @test psi_sec ≈ psi_full atol = 1e-12
+    end
+
+    @testset "Secular DDI via make_workspace" begin
+        config = GridConfig((8, 8, 8), (10.0, 10.0, 10.0))
+        grid = make_grid(config)
+        atom = Eu151
+        interactions = InteractionParams(100.0, 0.0)
+        sp = SimParams(dt=0.001, n_steps=1, imaginary_time=false, normalize_every=0, save_every=1)
+
+        ws = make_workspace(; grid, atom, interactions, sim_params=sp, enable_ddi=true, secular_ddi=true)
+        @test ws.ddi !== nothing
+        @test maximum(abs, ws.ddi.Q_xy) == 0.0
+    end
+
     @testset "DDI integrated into split-step (3D)" begin
         config = GridConfig((16, 16, 16), (10.0, 10.0, 10.0))
         grid = make_grid(config)

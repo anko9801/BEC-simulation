@@ -21,6 +21,7 @@ include("potentials.jl")
 include("zeeman.jl")
 include("propagators.jl")
 include("spin_mixing.jl")
+include("nematic.jl")
 include("losses.jl")
 include("split_step.jl")
 include("raman.jl")
@@ -93,6 +94,9 @@ export BatchedKineticCache
 
 # Spin mixing
 export apply_spin_mixing_step!
+
+# Nematic
+export apply_nematic_step!
 
 # Losses
 export apply_loss_step!

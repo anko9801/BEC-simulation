@@ -1,5 +1,5 @@
 function _to_json(x::Number)
-    isnan(x) || isinf(x) ? "null" : string(round(x, sigdigits=8))
+    isnan(x) || isinf(x) ? "null" : string(round(x, sigdigits=5))
 end
 function _to_json(s::AbstractString)
     "\"$(escape_string(s))\""

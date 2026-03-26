@@ -76,6 +76,96 @@
         @test E < 1e-28
     end
 
+    @testset "apply_nematic_step! c2=0 identity" begin
+        config = GridConfig(64, 20.0)
+        grid = make_grid(config)
+        sys = SpinSystem(1)
+        psi = init_psi(grid, sys; state=:uniform)
+        psi_orig = copy(psi)
+        interactions = InteractionParams(10.0, -0.5)  # c2=0
+        apply_nematic_step!(psi, interactions, 1, 0.01, 1)
+        @test psi ≈ psi_orig atol = 1e-15
+    end
+
+    @testset "apply_nematic_step! norm conservation (F=1)" begin
+        config = GridConfig(64, 20.0)
+        grid = make_grid(config)
+        sys = SpinSystem(1)
+        psi = init_psi(grid, sys; state=:uniform)
+        interactions = InteractionParams(10.0, -0.5, [50.0])  # c2=50
+        N0 = total_norm(psi, grid)
+        apply_nematic_step!(psi, interactions, 1, 0.01, 1)
+        N1 = total_norm(psi, grid)
+        @test abs(N1 - N0) / N0 < 1e-12
+    end
+
+    @testset "apply_nematic_step! norm conservation (F=2)" begin
+        config = GridConfig(64, 20.0)
+        grid = make_grid(config)
+        sys = SpinSystem(2)
+        psi = init_psi(grid, sys; state=:uniform)
+        interactions = InteractionParams(10.0, -0.5, [30.0])
+        N0 = total_norm(psi, grid)
+        apply_nematic_step!(psi, interactions, 2, 0.01, 1)
+        N1 = total_norm(psi, grid)
+        @test abs(N1 - N0) / N0 < 1e-12
+    end
+
+    @testset "apply_nematic_step! ferromagnetic invariance" begin
+        config = GridConfig(64, 20.0)
+        grid = make_grid(config)
+        sys = SpinSystem(1)
+        psi = init_psi(grid, sys; state=:ferromagnetic)
+        psi_orig = copy(psi)
+        interactions = InteractionParams(10.0, -0.5, [50.0])
+        apply_nematic_step!(psi, interactions, 1, 0.01, 1)
+        # Ferromagnetic: A₀₀=0, so nematic step is identity
+        @test psi ≈ psi_orig atol = 1e-14
+    end
+
+    @testset "apply_nematic_step! 2D norm conservation" begin
+        config = GridConfig((32, 32), (10.0, 10.0))
+        grid = make_grid(config)
+        sys = SpinSystem(1)
+        psi = init_psi(grid, sys; state=:uniform)
+        interactions = InteractionParams(10.0, -0.5, [50.0])
+        N0 = total_norm(psi, grid)
+        apply_nematic_step!(psi, interactions, 1, 0.01, 2)
+        N1 = total_norm(psi, grid)
+        @test abs(N1 - N0) / N0 < 1e-12
+    end
+
+    @testset "apply_nematic_step! ITP norm decrease" begin
+        config = GridConfig(64, 20.0)
+        grid = make_grid(config)
+        sys = SpinSystem(1)
+        psi = init_psi(grid, sys; state=:polar)
+        interactions = InteractionParams(10.0, -0.5, [50.0])
+        N0 = total_norm(psi, grid)
+        apply_nematic_step!(psi, interactions, 1, 0.001, 1; imaginary_time=true)
+        N1 = total_norm(psi, grid)
+        # ITP step doesn't conserve norm (damping), but shouldn't explode
+        @test N1 < 2 * N0
+        @test N1 > 0.0
+    end
+
+    @testset "apply_nematic_step! integrated in split_step" begin
+        config = GridConfig(64, 20.0)
+        grid = make_grid(config)
+        interactions = InteractionParams(10.0, -0.5, [50.0])
+        sp = SimParams(; dt=0.001, n_steps=10)
+        ws = make_workspace(;
+            grid, atom=Rb87, interactions,
+            potential=HarmonicTrap(1.0), sim_params=sp,
+        )
+        N0 = total_norm(ws.state.psi, ws.grid)
+        for _ in 1:10
+            split_step!(ws)
+        end
+        N1 = total_norm(ws.state.psi, ws.grid)
+        @test abs(N1 - N0) / N0 < 1e-6
+    end
+
     @testset "c2 in total_energy via get_cn" begin
         config = GridConfig(64, 20.0)
         grid = make_grid(config)

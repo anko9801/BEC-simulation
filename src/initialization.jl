@@ -51,6 +51,7 @@ function make_workspace(;
     psi_init::Union{Nothing,AbstractArray{ComplexF64}}=nothing,
     enable_ddi::Bool=false,
     c_dd::Float64=NaN,
+    secular_ddi::Bool=false,
     raman::Union{Nothing,RamanCoupling{N}}=nothing,
     loss::Union{Nothing,LossParams}=nothing,
     fft_flags=FFTW.MEASURE,
@@ -74,7 +75,7 @@ function make_workspace(;
 
     ddi = if enable_ddi
         c_dd_val = isnan(c_dd) ? compute_c_dd(atom) : c_dd
-        make_ddi_params(grid, atom; c_dd=c_dd_val)
+        make_ddi_params(grid, atom; c_dd=c_dd_val, secular=secular_ddi)
     else
         nothing
     end
@@ -89,7 +90,7 @@ function make_workspace(;
 
     ddi_pad = if ddi_padding && ddi !== nothing
         c_dd_val = isnan(c_dd) ? compute_c_dd(atom) : ddi.C_dd
-        make_ddi_padded(grid, atom; c_dd=c_dd_val, fft_flags)
+        make_ddi_padded(grid, atom; c_dd=c_dd_val, fft_flags, secular=secular_ddi)
     else
         nothing
     end

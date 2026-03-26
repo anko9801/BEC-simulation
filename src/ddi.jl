@@ -1,4 +1,19 @@
-function make_ddi_params(grid::Grid{N}, atom::AtomSpecies; c_dd::Float64=compute_c_dd(atom)) where {N}
+"""
+    make_ddi_params(grid, atom; c_dd, secular=false)
+
+Build DDI k-space tensor Q_αβ(k).
+
+When `secular=true`, uses the secular (Larmor-averaged) approximation valid when
+the Larmor precession frequency ω_L ≫ DDI interaction rate. In this regime, the
+transverse DDI components average out under rapid precession around B∥z:
+
+    Q_zz^sec = k̂_z² − 1/3       (unchanged)
+    Q_xx^sec = Q_yy^sec = −(k̂_z² − 1/3)/2
+    Q_xy^sec = Q_xz^sec = Q_yz^sec = 0
+
+Use with p=0 (rotating frame where linear Zeeman is eliminated).
+"""
+function make_ddi_params(grid::Grid{N}, atom::AtomSpecies; c_dd::Float64=compute_c_dd(atom), secular::Bool=false) where {N}
     C_dd = c_dd
     n_pts = grid.config.n_points
 
@@ -22,12 +37,20 @@ function make_ddi_params(grid::Grid{N}, atom::AtomSpecies; c_dd::Float64=compute
         kv_z = N >= 3 ? kz[I[3]] : 0.0
 
         inv_k2 = 1.0 / k2
-        Q_xx[I] = kv_x * kv_x * inv_k2 - 1.0 / 3.0
-        Q_yy[I] = kv_y * kv_y * inv_k2 - 1.0 / 3.0
-        Q_zz[I] = kv_z * kv_z * inv_k2 - 1.0 / 3.0
-        Q_xy[I] = kv_x * kv_y * inv_k2
-        Q_xz[I] = kv_x * kv_z * inv_k2
-        Q_yz[I] = kv_y * kv_z * inv_k2
+
+        if secular
+            qzz = kv_z * kv_z * inv_k2 - 1.0 / 3.0
+            Q_zz[I] = qzz
+            Q_xx[I] = -qzz / 2.0
+            Q_yy[I] = -qzz / 2.0
+        else
+            Q_xx[I] = kv_x * kv_x * inv_k2 - 1.0 / 3.0
+            Q_yy[I] = kv_y * kv_y * inv_k2 - 1.0 / 3.0
+            Q_zz[I] = kv_z * kv_z * inv_k2 - 1.0 / 3.0
+            Q_xy[I] = kv_x * kv_y * inv_k2
+            Q_xz[I] = kv_x * kv_z * inv_k2
+            Q_yz[I] = kv_y * kv_z * inv_k2
+        end
     end
 
     DDIParams{N}(C_dd, Q_xx, Q_xy, Q_xz, Q_yy, Q_yz, Q_zz)
@@ -153,7 +176,7 @@ Build zero-padded DDI context for reduced aliasing.
 
 Doubles grid size in each dimension. Builds Q tensor and FFT plans on padded grid.
 """
-function make_ddi_padded(grid::Grid{N}, atom::AtomSpecies; c_dd::Float64=compute_c_dd(atom), fft_flags=FFTW.MEASURE) where {N}
+function make_ddi_padded(grid::Grid{N}, atom::AtomSpecies; c_dd::Float64=compute_c_dd(atom), fft_flags=FFTW.MEASURE, secular::Bool=false) where {N}
     n_pts = grid.config.n_points
     padded_shape = ntuple(d -> 2 * n_pts[d], N)
 
@@ -185,12 +208,20 @@ function make_ddi_padded(grid::Grid{N}, atom::AtomSpecies; c_dd::Float64=compute
         kv_y = N >= 2 ? ky[I[2]] : 0.0
         kv_z = N >= 3 ? kz[I[3]] : 0.0
         inv_k2 = 1.0 / k2
-        Q_xx[I] = kv_x * kv_x * inv_k2 - 1.0 / 3.0
-        Q_yy[I] = kv_y * kv_y * inv_k2 - 1.0 / 3.0
-        Q_zz[I] = kv_z * kv_z * inv_k2 - 1.0 / 3.0
-        Q_xy[I] = kv_x * kv_y * inv_k2
-        Q_xz[I] = kv_x * kv_z * inv_k2
-        Q_yz[I] = kv_y * kv_z * inv_k2
+
+        if secular
+            qzz = kv_z * kv_z * inv_k2 - 1.0 / 3.0
+            Q_zz[I] = qzz
+            Q_xx[I] = -qzz / 2.0
+            Q_yy[I] = -qzz / 2.0
+        else
+            Q_xx[I] = kv_x * kv_x * inv_k2 - 1.0 / 3.0
+            Q_yy[I] = kv_y * kv_y * inv_k2 - 1.0 / 3.0
+            Q_zz[I] = kv_z * kv_z * inv_k2 - 1.0 / 3.0
+            Q_xy[I] = kv_x * kv_y * inv_k2
+            Q_xz[I] = kv_x * kv_z * inv_k2
+            Q_yz[I] = kv_y * kv_z * inv_k2
+        end
     end
 
     plans = make_fft_plans(padded_shape; flags=fft_flags)

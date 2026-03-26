@@ -47,13 +47,16 @@ y = collect(grid.x[2])
 nx, ny, nz = grid.config.n_points
 iz0 = div(nz, 2) + 1
 
-show_components = [1, 2, 3, 4, 5, 6, 7]  # m=+6 to m=0
+show_components = [1, 3, 5, 7]  # m=+6, +4, +2, 0
 
-# Per-component density threshold: 5% of each component's own peak at each snapshot
 println("Using per-component phase masking (5% of own peak)")
 
+snap_indices = length(snapshots) <= 4 ? (1:length(snapshots)) : [1, length(snapshots)÷2, length(snapshots)]
+println("Using $(length(snap_indices)) of $(length(snapshots)) snapshots")
+
 snap_data = []
-for (si, snap) in enumerate(snapshots)
+for si in snap_indices
+    snap = snapshots[si]
     t_ms = round(times[si] * EU_t_unit * 1e3, digits=2)
     comp_data = []
     for c in show_components
@@ -87,108 +90,191 @@ data_json = _to_json(Dict(
 
 n_show = length(show_components)
 
-html = """<!DOCTYPE html>
+html_head = """<!DOCTYPE html>
 <html><head>
 <meta charset="utf-8">
 <title>Vortex Phase Map ($(N_GRID)³)</title>
-<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 <style>
-body { background: #0a0a0f; color: #e0e0e0; font-family: monospace; margin: 0; padding: 10px; }
-.controls { display: flex; gap: 15px; align-items: center; margin: 10px 0; flex-wrap: wrap; }
-.slider-wrap { flex: 1; min-width: 300px; }
-input[type=range] { width: 100%; }
-.grid-row { display: grid; grid-template-columns: repeat($n_show, 1fr); gap: 3px; }
-.plot-cell { background: #111; border: 1px solid #333; border-radius: 4px; }
-h2 { margin: 5px 0; font-size: 14px; text-align: center; color: #aaa; }
-.info { font-size: 12px; color: #888; margin: 5px 0; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #0a0a0f; color: #e0e0e0; font-family: system-ui, sans-serif; padding: 12px; }
+h1 { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
+.controls { display: flex; gap: 12px; align-items: center; margin: 8px 0; }
+.controls label { font-size: 13px; color: #aaa; }
+#tSlider { flex: 1; min-width: 200px; accent-color: #6366f1; }
+#tLabel { font-size: 14px; font-weight: 500; min-width: 120px; }
+.info { font-size: 12px; color: #666; margin: 4px 0 10px; }
+h2 { font-size: 13px; color: #888; margin: 10px 0 4px; }
+.row { display: flex; gap: 4px; justify-content: center; }
+.cell { position: relative; }
+.cell canvas { display: block; border: 1px solid #2a2a3a; border-radius: 3px; }
+.cell .label { position: absolute; top: 2px; left: 4px; font-size: 11px; color: #ccc;
+  text-shadow: 0 0 3px #000, 0 0 6px #000; pointer-events: none; }
+.legend { display: flex; gap: 20px; align-items: center; margin: 8px 0; font-size: 11px; color: #888; }
+.legend canvas { border: 1px solid #333; border-radius: 2px; }
+#errBox { background: #400; color: #f88; padding: 8px; margin: 8px 0; font-size: 12px; display: none; white-space: pre-wrap; }
 </style>
 </head><body>
-<h1 style="margin:5px 0;font-size:16px">Vortex Structure: density & phase at z=0 ($(N_GRID)³, masked where n < 0.5% peak)</h1>
+<h1>&#185;&#8309;&#185;Eu Vortex Structure — density &amp; phase at z=0 ($(N_GRID)³)</h1>
+<div id="errBox"></div>
 <div class="controls">
-  <span id="tLabel" style="min-width:100px">t = 0.0 ms</span>
-  <div class="slider-wrap">
-    <input type="range" id="tSlider" min="0" max="0" value="0" step="1">
-  </div>
+  <label>Time:</label>
+  <input type="range" id="tSlider" min="0" max="0" value="0" step="1">
+  <span id="tLabel">t = 0.0 ms</span>
 </div>
-<div class="info">Top: density |ψ_m|² (log scale) / Bottom: phase arg(ψ_m) (masked) / m = +6 to 0</div>
-<h2>Density (log₁₀)</h2>
-<div class="grid-row" id="densRow"></div>
-<h2>Phase arg(ψ_m)</h2>
-<div class="grid-row" id="phaseRow"></div>
+<div class="info">m<sub>F</sub> = +6, +4, +2, 0 | Top: density |ψ<sub>m</sub>|² (log, Hot) | Bottom: phase arg(ψ<sub>m</sub>) (HSV, masked)</div>
 
+<h2>Density (log₁₀)</h2>
+<div class="row" id="densRow"></div>
+<div class="legend">
+  <span>low</span><canvas id="densLeg" width="200" height="12"></canvas><span>high</span>
+</div>
+
+<h2>Phase arg(ψ<sub>m</sub>)</h2>
+<div class="row" id="phaseRow"></div>
+<div class="legend">
+  <span>−π</span><canvas id="phaseLeg" width="200" height="12"></canvas><span>+π</span>
+</div>
+
+<script id="rawdata" type="application/json">
+"""
+
+html_tail = """
+</script>
 <script>
-const D = $data_json;
-const snaps = D.snapshots;
-const x = D.x, y = D.y;
-const nComp = snaps[0].components.length;
-const R = 6;  // zoom radius in a_ho
+window.onerror = function(msg, url, line, col, err) {
+  var b = document.getElementById('errBox');
+  b.style.display = 'block';
+  b.textContent += msg + ' (line ' + line + ')\\n';
+};
+try {
+const D = JSON.parse(document.getElementById('rawdata').textContent.trim());
+const snaps = D.snapshots, x = D.x, y = D.y;
+const N = x.length, nComp = snaps[0].components.length;
+const PX = Math.min(Math.floor((window.innerWidth - 40) / nComp - 4), 300);
 
 const slider = document.getElementById('tSlider');
 slider.max = snaps.length - 1;
 const tLabel = document.getElementById('tLabel');
 
-const densRow = document.getElementById('densRow');
-const phaseRow = document.getElementById('phaseRow');
-const densPlots = [], phasePlots = [];
-
-for (let i = 0; i < nComp; i++) {
-  const dd = document.createElement('div');
-  dd.className = 'plot-cell'; dd.id = 'dens' + i;
-  densRow.appendChild(dd); densPlots.push(dd);
-  const pd = document.createElement('div');
-  pd.className = 'plot-cell'; pd.id = 'phase' + i;
-  phaseRow.appendChild(pd); phasePlots.push(pd);
+function hotColor(t) {
+  t = Math.max(0, Math.min(1, t));
+  const r = Math.min(1, t * 2.5);
+  const g = Math.max(0, Math.min(1, (t - 0.4) * 2.5));
+  const b = Math.max(0, Math.min(1, (t - 0.7) * 3.3));
+  return [r*255|0, g*255|0, b*255|0];
 }
 
-function logDens(z) {
-  return z.map(row => row.map(v => v > 0 ? Math.log10(v) : null));
+function phaseColor(t) {
+  t = Math.max(0, Math.min(1, t));
+  var h = t * 6, i = h | 0, f = h - i;
+  if (i >= 6) i = 5;
+  var s = 0.85, v = 0.9;
+  var p = v*(1-s), q = v*(1-s*f), t2 = v*(1-s*(1-f));
+  var rgb = i===0 ? [v,t2,p] : i===1 ? [q,v,p] : i===2 ? [p,v,t2] : i===3 ? [p,q,v] : i===4 ? [t2,p,v] : [v,p,q];
+  return [rgb[0]*255|0, rgb[1]*255|0, rgb[2]*255|0];
 }
 
-const axCommon = {
-  color: '#888', tickfont: { size: 8 },
-  range: [-R, R],
-};
+function makeCanvases(parentId) {
+  var row = document.getElementById(parentId);
+  var arr = [];
+  for (var i = 0; i < nComp; i++) {
+    var cell = document.createElement('div');
+    cell.className = 'cell';
+    var cv = document.createElement('canvas');
+    cv.width = PX; cv.height = PX;
+    var lbl = document.createElement('div');
+    lbl.className = 'label';
+    cell.appendChild(cv); cell.appendChild(lbl);
+    row.appendChild(cell);
+    arr.push({ canvas: cv, ctx: cv.getContext('2d'), label: lbl });
+  }
+  return arr;
+}
+
+var densCvs = makeCanvases('densRow');
+var phaseCvs = makeCanvases('phaseRow');
+
+function drawHeatmap(entry, data, colorFn, vmin, vmax) {
+  var ctx = entry.ctx, canvas = entry.canvas;
+  var w = canvas.width, h = canvas.height;
+  var img = ctx.createImageData(w, h);
+  var d = img.data;
+  var scale = data.length / w;
+  var range = vmax - vmin;
+  if (range === 0) range = 1;
+  for (var py = 0; py < h; py++) {
+    var iy = Math.min(data.length-1, py * scale | 0);
+    var row = data[iy];
+    for (var px = 0; px < w; px++) {
+      var ix = Math.min(row.length-1, px * scale | 0);
+      var v = row[ix];
+      var off = (py * w + px) * 4;
+      if (v === null || v !== v) {
+        d[off] = 17; d[off+1] = 17; d[off+2] = 17; d[off+3] = 255;
+      } else {
+        var t = Math.max(0, Math.min(1, (v - vmin) / range));
+        var c = colorFn(t);
+        d[off] = c[0]; d[off+1] = c[1]; d[off+2] = c[2]; d[off+3] = 255;
+      }
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+}
 
 function update(si) {
-  const s = snaps[si];
+  var s = snaps[si];
   tLabel.textContent = 't = ' + s.t_ms + ' ms';
 
-  for (let i = 0; i < nComp; i++) {
-    const c = s.components[i];
-    const mF = c.m_F;
+  for (var i = 0; i < nComp; i++) {
+    var c = s.components[i];
+    var mF = c.m_F;
 
-    Plotly.react(densPlots[i], [{
-      z: logDens(c.density), x: x, y: y,
-      type: 'heatmap', colorscale: 'Hot', reversescale: true,
-      colorbar: { len: 0.8, thickness: 8, tickfont: { size: 8, color: '#aaa' } },
-    }], {
-      title: { text: 'm=' + mF, font: { size: 11, color: '#ccc' } },
-      xaxis: { ...axCommon, title: '' },
-      yaxis: { ...axCommon, title: '', scaleanchor: 'x' },
-      paper_bgcolor: '#111', plot_bgcolor: '#111',
-      margin: { l: 30, r: 25, t: 25, b: 20 }, height: 260,
-    }, { responsive: true });
+    var logd = c.density.map(function(row) { return row.map(function(v) { return v > 0 ? Math.log10(v) : null; }); });
+    var dmin = Infinity, dmax = -Infinity;
+    for (var r = 0; r < logd.length; r++) {
+      var row = logd[r];
+      for (var j = 0; j < row.length; j++) {
+        var v = row[j];
+        if (v !== null) { if (v < dmin) dmin = v; if (v > dmax) dmax = v; }
+      }
+    }
 
-    Plotly.react(phasePlots[i], [{
-      z: c.phase, x: x, y: y,
-      type: 'heatmap', colorscale: 'HSV', zmin: -Math.PI, zmax: Math.PI,
-      colorbar: { len: 0.8, thickness: 8, tickfont: { size: 8, color: '#aaa' },
-                  tickvals: [-3.14, -1.57, 0, 1.57, 3.14],
-                  ticktext: ['-\\u03c0', '-\\u03c0/2', '0', '\\u03c0/2', '\\u03c0'] },
-    }], {
-      title: { text: 'm=' + mF, font: { size: 11, color: '#ccc' } },
-      xaxis: { ...axCommon, title: '' },
-      yaxis: { ...axCommon, title: '', scaleanchor: 'x' },
-      paper_bgcolor: '#111', plot_bgcolor: '#222',
-      margin: { l: 30, r: 25, t: 25, b: 20 }, height: 260,
-    }, { responsive: true });
+    densCvs[i].label.textContent = 'm=' + mF;
+    drawHeatmap(densCvs[i], logd, hotColor, dmin, dmax);
+
+    phaseCvs[i].label.textContent = 'm=' + mF;
+    drawHeatmap(phaseCvs[i], c.phase, phaseColor, -Math.PI, Math.PI);
   }
 }
 
-slider.addEventListener('input', () => update(+slider.value));
+function drawLegend(id, colorFn) {
+  var cv = document.getElementById(id);
+  var ctx = cv.getContext('2d');
+  var img = ctx.createImageData(cv.width, cv.height);
+  for (var px = 0; px < cv.width; px++) {
+    var t = px / (cv.width - 1);
+    var c = colorFn(t);
+    for (var py = 0; py < cv.height; py++) {
+      var off = (py * cv.width + px) * 4;
+      img.data[off] = c[0]; img.data[off+1] = c[1]; img.data[off+2] = c[2]; img.data[off+3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+}
+drawLegend('densLeg', hotColor);
+drawLegend('phaseLeg', phaseColor);
+
+slider.addEventListener('input', function() { update(+slider.value); });
 update(0);
+} catch(e) {
+  var b = document.getElementById('errBox');
+  b.style.display = 'block';
+  b.textContent = e.message + '\\n' + e.stack;
+}
 </script>
 </body></html>"""
+
+html = html_head * data_json * html_tail
 
 outpath = joinpath(@__DIR__, "..", "vortex_phase_map.html")
 write(outpath, html)
