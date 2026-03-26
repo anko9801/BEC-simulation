@@ -104,16 +104,29 @@ Falls back to full eigendecomposition for imaginary time.
     v = MVector{D,ComplexF64}(undef)
     w = MVector{D,ComplexF64}(undef)
 
-    # Rz(-α): exp(-i m (-α)) = exp(i m α)
+    # Recurrence bases (6 cis total instead of 65)
+    z_neg_alpha = cis(-alpha)       # m → m-1 step for Rz
+    z_beta = cis(beta)              # λ → λ+1 step for Ry (eigenvalues ascending)
+    z_theta = cis(theta)            # -m → -(m-1) step for Dz
+
+    rz_phase = cis(F * alpha)       # Rz(-α) start: exp(+iF·α)
+    ry_phase = cis(-F * beta)       # Ry(-β) start: exp(-iF·β)
+    dz_phase = cis(-F * theta)      # Dz(θ) start: exp(-iF·θ)
+
+    # Rz(-α): exp(+imα) via recurrence
+    phase = rz_phase
     @inbounds for c in 1:D
-        v[c] = cis(m_vals[c] * alpha) * spinor[c]
+        v[c] = phase * spinor[c]
+        phase *= z_neg_alpha
     end
 
-    # Ry(-β): w = Vt·v with phase, then v = V·w
+    # Ry(-β) = V · diag(exp(+iβλ)) · Vt via recurrence
+    phase = ry_phase
     @inbounds for i in 1:D
         s = zero(ComplexF64)
         for j in 1:D; s += Vt_Fy[i,j] * v[j]; end
-        w[i] = cis(beta * λ_Fy[i]) * s
+        w[i] = phase * s
+        phase *= z_beta
     end
     @inbounds for i in 1:D
         s = zero(ComplexF64)
@@ -121,26 +134,30 @@ Falls back to full eigendecomposition for imaginary time.
         v[i] = s
     end
 
-    # Dz(θ)
+    # Dz(θ): exp(-imθ) via recurrence
+    phase = dz_phase
     @inbounds for c in 1:D
-        v[c] *= cis(-m_vals[c] * theta)
+        v[c] *= phase
+        phase *= z_theta
     end
 
-    # Ry(β): w = Vt·v with phase, then v = V·w
+    # Ry(β) = V · diag(exp(-iβλ)) · Vt — conj of Ry(-β) phases
+    phase = conj(ry_phase)
+    z_neg_beta = conj(z_beta)
     @inbounds for i in 1:D
         s = zero(ComplexF64)
         for j in 1:D; s += Vt_Fy[i,j] * v[j]; end
-        w[i] = cis(-beta * λ_Fy[i]) * s
+        w[i] = phase * s
+        phase *= z_neg_beta
     end
+    # Fused V·w output + Rz(α): exp(-imα) via conj recurrence
+    phase = conj(rz_phase)
+    z_alpha = conj(z_neg_alpha)
     @inbounds for i in 1:D
         s = zero(ComplexF64)
         for j in 1:D; s += V_Fy[i,j] * w[j]; end
-        v[i] = s
-    end
-
-    # Rz(α): exp(-i m α)
-    @inbounds for c in 1:D
-        v[c] *= cis(-m_vals[c] * alpha)
+        v[i] = phase * s
+        phase *= z_alpha
     end
 
     SVector(v)

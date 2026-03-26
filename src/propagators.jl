@@ -84,18 +84,20 @@ function _diagonal_step_svec!(::Val{N}, psi, V_trap, zeeman_diag::SVector{D,Floa
     if imaginary_time
         zee_shift = minimum(zeeman_diag)
         zee_dt = SVector{D,Float64}(ntuple(c -> (zeeman_diag[c] - zee_shift) * dt_frac, Val(D)))
+        zee_exp = SVector{D,Float64}(ntuple(c -> exp(-zee_dt[c]), Val(D)))
         @inbounds for I in CartesianIndices(n_pts)
-            base = (V_trap[I] + c0 * density_buf[I]) * dt_frac
+            exp_base = exp(-(V_trap[I] + c0 * density_buf[I]) * dt_frac)
             for c in 1:D
-                psi[I, c] *= exp(-(base + zee_dt[c]))
+                psi[I, c] *= exp_base * zee_exp[c]
             end
         end
     else
         zee_dt = SVector{D,Float64}(ntuple(c -> zeeman_diag[c] * dt_frac, Val(D)))
+        zee_cis = SVector{D,ComplexF64}(ntuple(c -> cis(-zee_dt[c]), Val(D)))
         @inbounds for I in CartesianIndices(n_pts)
-            base = (V_trap[I] + c0 * density_buf[I]) * dt_frac
+            cis_base = cis(-(V_trap[I] + c0 * density_buf[I]) * dt_frac)
             for c in 1:D
-                psi[I, c] *= cis(-(base + zee_dt[c]))
+                psi[I, c] *= cis_base * zee_cis[c]
             end
         end
     end
