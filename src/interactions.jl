@@ -53,12 +53,15 @@ function compute_c0(atom::AtomSpecies; N_atoms::Int=1, dims::Int=1, length_scale
 end
 
 """
-DDI coupling constant: C_dd = μ₀ μ² / (4π).
-Returns C_dd in SI (J·m³). Zero for non-dipolar atoms.
+DDI coupling constant: c_dd = μ₀ μ².
+Returns c_dd in SI (J·m³). Zero for non-dipolar atoms.
+
+Used with k-space kernel Q_αβ(k) = k̂_αk̂_β − δ_αβ/3, which is the Fourier
+transform of (δ_αβ − 3r̂_αr̂_β)/(4πr³) — the 1/(4π) is absorbed into Q.
 """
 function compute_c_dd(atom::AtomSpecies)
     atom.mu_mag == 0.0 && return 0.0
-    Units.MU_0 * atom.mu_mag^2 / (4π)
+    Units.MU_0 * atom.mu_mag^2
 end
 
 """

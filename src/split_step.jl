@@ -38,6 +38,10 @@ function split_step!(ws::Workspace{N}) where {N}
     nothing
 end
 
+"""
+Symmetric inner splitting: diag(dt/4) → SM(dt/4) → DDI(dt/2) → SM(dt/4) → diag(dt/4).
+SM and DDI are non-commuting, so symmetric splitting preserves 2nd-order accuracy.
+"""
 function _half_potential_step!(ws::Workspace{N}, dt_half, n_comp, ndim, imaginary_time) where {N}
     zee = zeeman_at(ws.zeeman, ws.state.t)
     zeeman_diag = zeeman_diagonal(zee, ws.spin_matrices)
@@ -49,7 +53,7 @@ function _half_potential_step!(ws::Workspace{N}, dt_half, n_comp, ndim, imaginar
 
     @timeit_debug TIMER "spin_mixing" apply_spin_mixing_step!(
         ws.state.psi, ws.spin_matrices, ws.interactions.c1,
-        dt_half, ndim;
+        dt_half / 2, ndim;
         imaginary_time,
     )
 
@@ -76,6 +80,12 @@ function _half_potential_step!(ws::Workspace{N}, dt_half, n_comp, ndim, imaginar
             imaginary_time,
         )
     end
+
+    @timeit_debug TIMER "spin_mixing" apply_spin_mixing_step!(
+        ws.state.psi, ws.spin_matrices, ws.interactions.c1,
+        dt_half / 2, ndim;
+        imaginary_time,
+    )
 
     @timeit_debug TIMER "diagonal" _diagonal_step_svec!(
         Val(N), ws.state.psi, ws.potential_values, zeeman_diag,

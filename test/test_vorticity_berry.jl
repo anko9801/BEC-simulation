@@ -113,7 +113,7 @@ using LinearAlgebra
             psi ./= sqrt(sum(abs2, psi) * dV)
 
             omega = berry_curvature(psi, grid, plans, sm)
-            Q_from_omega = sum(omega) * dV / (4π * sm.system.F)
+            Q_from_omega = sum(omega) * dV / (4π)
             Q_from_charge = spin_texture_charge(psi, grid, plans, sm)
 
             @test abs(Q_from_omega - Q_from_charge) < 1e-12

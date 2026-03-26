@@ -358,7 +358,7 @@ end
 """
 Gauge-invariant Berry curvature from the Mermin-Ho relation:
   Ω = ŝ · (∂_i ŝ × ∂_j ŝ)
-where ŝ = ⟨F⟩/|⟨F⟩| is the local spin direction.
+where ŝ = f/|f| is the unit spin direction (f = ⟨F⟩ spin density vector).
 
 - 1D: returns `zeros(Float64, n_pts)`
 - 2D: returns `Array{Float64,2}` (Ω_z)
@@ -371,18 +371,18 @@ function berry_curvature(psi::AbstractArray{ComplexF64}, grid::Grid{N},
     N >= 2 || return zeros(Float64, n_pts)
 
     fx, fy, fz = spin_density_vector(psi, sm, N)
-    n = total_density(psi, N)
 
     sx = zeros(Float64, n_pts)
     sy = zeros(Float64, n_pts)
     sz = zeros(Float64, n_pts)
 
     @inbounds for I in CartesianIndices(n_pts)
-        if n[I] > density_cutoff
-            inv_n = 1.0 / n[I]
-            sx[I] = fx[I] * inv_n
-            sy[I] = fy[I] * inv_n
-            sz[I] = fz[I] * inv_n
+        f_mag = sqrt(fx[I]^2 + fy[I]^2 + fz[I]^2)
+        if f_mag > density_cutoff
+            inv_f = 1.0 / f_mag
+            sx[I] = fx[I] * inv_f
+            sy[I] = fy[I] * inv_f
+            sz[I] = fz[I] * inv_f
         end
     end
 
@@ -401,9 +401,9 @@ function berry_curvature(psi::AbstractArray{ComplexF64}, grid::Grid{N},
 end
 
 """
-Topological skyrmion charge Q = (1/4πF) ∫ Ω d²r.
+Topological skyrmion charge Q = (1/4π) ∫ Ω d²r.
 2D only; returns 0.0 for other dimensions.
-Delegates to `berry_curvature`.
+Delegates to `berry_curvature` where ŝ = f/|f| is the unit spin vector.
 """
 function spin_texture_charge(psi::AbstractArray{ComplexF64}, grid::Grid{N},
                              plans::FFTPlans, sm::SpinMatrices;
@@ -411,5 +411,5 @@ function spin_texture_charge(psi::AbstractArray{ComplexF64}, grid::Grid{N},
     N == 2 || return 0.0
     omega = berry_curvature(psi, grid, plans, sm; density_cutoff)
     dV = cell_volume(grid)
-    sum(omega) * dV / (4π * sm.system.F)
+    sum(omega) * dV / (4π)
 end

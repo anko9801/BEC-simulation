@@ -20,7 +20,7 @@
     @testset "C_dd value for Eu151" begin
         C_dd = compute_c_dd(Eu151)
         @test C_dd > 0.0
-        @test C_dd ≈ SpinorBEC.Units.MU_0 * (7.0 * SpinorBEC.Units.MU_BOHR)^2 / (4π) rtol = 1e-10
+        @test C_dd ≈ SpinorBEC.Units.MU_0 * (7.0 * SpinorBEC.Units.MU_BOHR)^2 rtol = 1e-10
     end
 
     @testset "a_dd and epsilon_dd for Eu151" begin
