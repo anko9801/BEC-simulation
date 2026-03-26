@@ -109,6 +109,8 @@ function run_edh(; dt=0.001, t_total_ms=40.0, n_save=100)
     println("  Running $(n_steps) steps (dt=$dt, p=$(round(EU_p_weak; digits=3)))...")
     sm = ws.spin_matrices
 
+    enable_tracing!()
+    reset_tracing!()
     result = run_simulation!(ws;
         callback=(ws, step) -> begin
             if step % max(1, n_steps ÷ 10) == 0
@@ -118,6 +120,10 @@ function run_edh(; dt=0.001, t_total_ms=40.0, n_save=100)
             end
         end,
     )
+
+    println("\n--- Timer breakdown ---")
+    println(TIMER)
+    disable_tracing!()
 
     psi_f = result.psi_snapshots[end]
     fx, fy, fz = spin_density_vector(psi_f, sm, 3)
@@ -170,6 +176,8 @@ function run_flower_ground_state(; dt=0.001, n_steps=50_000, tol=1e-10)
     E_prev = total_energy(ws)
     converged = false
 
+    enable_tracing!()
+    reset_tracing!()
     for step in 1:n_steps
         split_step!(ws)
 
@@ -186,6 +194,10 @@ function run_flower_ground_state(; dt=0.001, n_steps=50_000, tol=1e-10)
             E_prev = E
         end
     end
+
+    println("\n--- Timer breakdown ---")
+    println(TIMER)
+    disable_tracing!()
 
     psi_f = ws.state.psi
     fx, fy, fz = spin_density_vector(psi_f, sm, 3)

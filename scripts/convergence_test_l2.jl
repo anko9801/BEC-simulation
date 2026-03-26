@@ -23,6 +23,10 @@ t_test = 2.0e-3 / EU_t_unit
 println("t_test = $(round(t_test, digits=3)) ω⁻¹")
 println("Using _wavefunction_l2_change (phase-sensitive)")
 
+# --- Enable tracing ---
+enable_tracing!()
+reset_tracing!()
+
 test_configs = [
     ("fixed dt=0.0005", nothing, 0.0005),
     ("fixed dt=0.001",  nothing, 0.001),
@@ -126,5 +130,9 @@ for r in results
     drift = abs(r.E - E0) / abs(E0)
     @printf("  %-20s ΔE/E = %.2e\n", r.label, drift)
 end
+
+println("\n--- Timer breakdown ---")
+println(TIMER)
+disable_tracing!()
 
 println("\nDone!")

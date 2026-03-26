@@ -146,6 +146,8 @@ ws4 = make_workspace(;
 println("  initial norm: $(total_norm(ws4.state.psi, grid2))")
 println("  initial E: $(total_energy(ws4))")
 
+enable_tracing!()
+reset_tracing!()
 for i in 1:10
     SpinorBEC.split_step!(ws4)
     n = total_norm(ws4.state.psi, grid2)
@@ -157,6 +159,9 @@ for i in 1:10
         break
     end
 end
+println("\n--- Timer breakdown ---")
+println(TIMER)
+disable_tracing!()
 
 println("\n" * "=" ^ 60)
 println("DEBUG COMPLETE")

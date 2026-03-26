@@ -26,6 +26,10 @@ function make_seeded_psi()
     seed_noise(psi_gs, n_comp, 3, grid)
 end
 
+# --- Enable tracing ---
+enable_tracing!()
+reset_tracing!()
+
 # --- Compare fixed dt ---
 println("--- Fixed dt comparison (10 ms) ---")
 for dt in [0.01, 0.005, 0.002]
@@ -89,3 +93,7 @@ for tol in [0.05, 0.01, 0.005]
     println("  tol=$tol: Strang $(round(wall_s; digits=1))s ($(res_s.n_accepted) steps) " *
             " Yoshida $(round(wall_y; digits=1))s ($(res_y.n_accepted) steps)  Δp=$(round(dp; digits=6))")
 end
+
+println("\n--- Timer breakdown ---")
+println(TIMER)
+disable_tracing!()

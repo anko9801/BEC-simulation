@@ -21,9 +21,13 @@ ws = make_workspace(; grid, atom, interactions=InteractionParams(EU_c0, 0.0),
     sim_params=sp, psi_init=psi, enable_ddi=true, c_dd=EU_c_dd)
 
 adaptive = AdaptiveDtParams(dt_init=0.002, dt_min=0.0001, dt_max=0.005, tol=0.001)
+enable_tracing!()
+reset_tracing!()
 println("Running 2ms dynamics...")
 out = run_simulation_adaptive!(ws; adaptive, t_end, save_interval=0.25)
 println("  done: $(out.n_accepted) steps\n")
+println(TIMER)
+disable_tracing!()
 
 # --- φ-spectrum analysis ---
 x = collect(grid.x[1])

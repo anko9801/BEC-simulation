@@ -56,6 +56,10 @@ for ε_target in [0.01, 0.001, 0.0001]
     println("  ε_total=$ε_target → dt_CFL=$(round(dt_cfl, sigdigits=3)), ~$(n_steps_est) steps")
 end
 
+# --- Enable tracing ---
+enable_tracing!()
+reset_tracing!()
+
 # --- Convergence test: run 2ms at multiple tolerances ---
 println("\n--- Convergence test (t=0 to 2ms) ---")
 
@@ -149,5 +153,9 @@ for r in results
     max_diff = maximum(abs.(r.pops .- ref.pops))
     println("  $(r.label): Δp_max = $(round(max_diff, sigdigits=3))")
 end
+
+println("\n--- Timer breakdown ---")
+println(TIMER)
+disable_tracing!()
 
 println("\nDone!")

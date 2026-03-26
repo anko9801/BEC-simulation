@@ -39,6 +39,8 @@ ws_relax = make_workspace(;
     enable_ddi=true, c_dd=EU_c_dd,
 )
 adaptive = AdaptiveDtParams(dt_init=0.002, dt_min=0.0001, dt_max=0.005, tol=0.001)
+enable_tracing!()
+reset_tracing!()
 t_start_wall = time()
 progress_cb = function(ws, step)
     elapsed = time() - t_start_wall
@@ -65,6 +67,9 @@ out = run_simulation_adaptive!(ws_relax; adaptive, t_end, save_interval=0.25, ca
 result_relax = out.result
 println("  done, t=$(ws_relax.state.t), elapsed=$(round(time()-t_relax, digits=1))s")
 println("  accepted=$(out.n_accepted), rejected=$(out.n_rejected), final_dt=$(round(out.final_dt, sigdigits=3))")
+println("\n--- Timer breakdown ---")
+println(TIMER)
+disable_tracing!()
 
 # --- Extract data for visualization ---
 println("Extracting visualization data...")
