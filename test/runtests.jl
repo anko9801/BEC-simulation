@@ -29,4 +29,8 @@ using SpinorBEC
     include("test_majorana.jl")
     include("test_diagnostics.jl")
     include("test_losses.jl")
+    include("test_lhy.jl")
+    include("test_nematic.jl")
+    include("test_batched_kinetic.jl")
+    include("test_ddi_padded.jl")
 end

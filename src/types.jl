@@ -78,10 +78,13 @@ AtomSpecies(name, mass, F, a0, a2) = AtomSpecies(name, mass, F, a0, a2, 0.0)
 struct InteractionParams
     c0::Float64
     c1::Float64
+    c_lhy::Float64
     c_extra::Vector{Float64}
 
-    InteractionParams(c0::Float64, c1::Float64) = new(c0, c1, Float64[])
-    InteractionParams(c0::Float64, c1::Float64, c_extra::Vector{Float64}) = new(c0, c1, c_extra)
+    InteractionParams(c0::Float64, c1::Float64) = new(c0, c1, 0.0, Float64[])
+    InteractionParams(c0::Float64, c1::Float64, c_extra::Vector{Float64}) = new(c0, c1, 0.0, c_extra)
+    InteractionParams(c0::Float64, c1::Float64, c_lhy::Float64) = new(c0, c1, c_lhy, Float64[])
+    InteractionParams(c0::Float64, c1::Float64, c_lhy::Float64, c_extra::Vector{Float64}) = new(c0, c1, c_lhy, c_extra)
 end
 
 function get_cn(ip::InteractionParams, n::Int)
@@ -213,6 +216,33 @@ end
 
 LossParams(gamma_dr::Float64) = LossParams(gamma_dr, 0.0)
 
+# --- DDI Padded Context ---
+
+struct DDIPaddedContext{N,P,IP}
+    padded_shape::NTuple{N,Int}
+    plans::FFTPlans{P,IP}
+    Q_xx::Array{Float64,N}
+    Q_xy::Array{Float64,N}
+    Q_xz::Array{Float64,N}
+    Q_yy::Array{Float64,N}
+    Q_yz::Array{Float64,N}
+    Q_zz::Array{Float64,N}
+    Fx_pad::Array{ComplexF64,N}
+    Fy_pad::Array{ComplexF64,N}
+    Fz_pad::Array{ComplexF64,N}
+    Phi_x_pad::Array{ComplexF64,N}
+    Phi_y_pad::Array{ComplexF64,N}
+    Phi_z_pad::Array{ComplexF64,N}
+end
+
+# --- Batched Kinetic Cache ---
+
+struct BatchedKineticCache{P,IP}
+    forward::P
+    inverse::IP
+    kinetic_phase_bc::Array{ComplexF64}
+end
+
 # --- Adaptive Time Stepping ---
 
 struct AdaptiveDtParams
@@ -233,7 +263,7 @@ end
 
 # --- Workspace ---
 
-struct Workspace{N,A,P,IP,SM<:SpinMatrices,ZEE,DDI,DDIB,RAM,LOSS}
+struct Workspace{N,A,P,IP,SM<:SpinMatrices,ZEE,DDI,DDIB,RAM,LOSS,DDIP,BK}
     state::SimState{N,A}
     fft_plans::FFTPlans{P,IP}
     kinetic_phase::Array{ComplexF64,N}
@@ -250,4 +280,6 @@ struct Workspace{N,A,P,IP,SM<:SpinMatrices,ZEE,DDI,DDIB,RAM,LOSS}
     ddi_bufs::DDIB
     raman::RAM
     loss::LOSS
+    ddi_padded::DDIP
+    batched_kinetic::BK
 end

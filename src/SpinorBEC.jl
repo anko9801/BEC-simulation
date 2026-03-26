@@ -63,7 +63,7 @@ export Rb87, Na23, Eu151
 export compute_interaction_params, compute_c0, compute_c_dd, compute_a_dd
 
 # DDI
-export DDIParams, DDIBuffers, make_ddi_params, make_ddi_buffers
+export DDIParams, DDIBuffers, DDIPaddedContext, make_ddi_params, make_ddi_buffers, make_ddi_padded
 export compute_ddi_potential!, apply_ddi_step!
 
 # Potentials
@@ -88,7 +88,8 @@ export LaserBeamPotential, crossed_laser_trap
 export thomas_fermi_density, init_psi_thomas_fermi
 
 # Propagators
-export apply_kinetic_step!, apply_diagonal_potential_step!
+export apply_kinetic_step!, apply_kinetic_step_batched!, apply_diagonal_potential_step!
+export BatchedKineticCache
 
 # Spin mixing
 export apply_spin_mixing_step!
@@ -107,7 +108,7 @@ export total_density, component_density, magnetization
 export spin_density_vector, total_norm, total_energy
 export probability_current, orbital_angular_momentum
 export superfluid_velocity, total_angular_momentum, spin_texture_charge
-export superfluid_vorticity, berry_curvature
+export superfluid_vorticity, berry_curvature, singlet_pair_amplitude
 export majorana_stars, icosahedral_order_parameter
 export get_cn
 

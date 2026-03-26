@@ -30,7 +30,7 @@ function apply_loss_step!(
 
     scale = 1.0 / (2 * F * (2 * F + 1))
     for c in 1:n_components
-        m = -F + c - 1
+        m = F - (c - 1)
         gamma_m = loss.gamma_dr * (F + m) * (F - m + 1) * scale
         rate = gamma_m + loss.L3
         rate < 1e-30 && continue

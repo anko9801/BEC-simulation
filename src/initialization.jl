@@ -54,6 +54,7 @@ function make_workspace(;
     raman::Union{Nothing,RamanCoupling{N}}=nothing,
     loss::Union{Nothing,LossParams}=nothing,
     fft_flags=FFTW.MEASURE,
+    ddi_padding::Bool=false,
 ) where {N}
     sys = SpinSystem(atom.F)
     sm = spin_matrices(atom.F)
@@ -86,8 +87,17 @@ function make_workspace(;
 
     density_buf = zeros(Float64, grid.config.n_points)
 
+    ddi_pad = if ddi_padding && ddi !== nothing
+        c_dd_val = isnan(c_dd) ? compute_c_dd(atom) : ddi.C_dd
+        make_ddi_padded(grid, atom; c_dd=c_dd_val, fft_flags)
+    else
+        nothing
+    end
+
+    batched_kinetic = _make_batched_kinetic_cache(psi, kinetic_phase, N; flags=fft_flags)
+
     Workspace(
         state, plans, kinetic_phase, V, density_buf, sm, grid, atom, interactions, zeeman, potential, sim_params,
-        ddi, ddi_bufs, raman, loss,
+        ddi, ddi_bufs, raman, loss, ddi_pad, batched_kinetic,
     )
 end

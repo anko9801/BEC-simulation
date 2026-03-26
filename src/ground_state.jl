@@ -135,5 +135,6 @@ function _rebuild_workspace_with_dt(ws::Workspace{N}, new_dt::Float64) where {N}
         ws.state, ws.fft_plans, kinetic_phase, ws.potential_values, ws.density_buf,
         ws.spin_matrices, ws.grid, ws.atom, ws.interactions,
         ws.zeeman, ws.potential, sp, ws.ddi, ws.ddi_bufs, ws.raman, ws.loss,
+        ws.ddi_padded, ws.batched_kinetic,
     )
 end

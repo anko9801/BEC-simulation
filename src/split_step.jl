@@ -18,10 +18,7 @@ function split_step!(ws::Workspace{N}) where {N}
 
     @timeit_debug TIMER "half_potential" _half_potential_step!(ws, dt / 2, n_comp, N, it)
 
-    @timeit_debug TIMER "kinetic" apply_kinetic_step!(
-        ws.state.psi, ws.state.fft_buf, ws.kinetic_phase,
-        ws.fft_plans, n_comp, N,
-    )
+    @timeit_debug TIMER "kinetic" apply_kinetic_step_batched!(ws.state.psi, ws.batched_kinetic)
 
     @timeit_debug TIMER "half_potential" _half_potential_step!(ws, dt / 2, n_comp, N, it)
 
@@ -47,7 +44,7 @@ function _half_potential_step!(ws::Workspace{N}, dt_half, n_comp, ndim, imaginar
 
     @timeit_debug TIMER "diagonal" _diagonal_step_svec!(
         Val(N), ws.state.psi, ws.potential_values, zeeman_diag,
-        ws.interactions.c0, dt_half / 2, ws.density_buf, imaginary_time,
+        ws.interactions.c0, ws.interactions.c_lhy, dt_half / 2, ws.density_buf, imaginary_time,
     )
 
     @timeit_debug TIMER "spin_mixing" apply_spin_mixing_step!(
@@ -57,11 +54,19 @@ function _half_potential_step!(ws::Workspace{N}, dt_half, n_comp, ndim, imaginar
     )
 
     if ws.ddi !== nothing
-        @timeit_debug TIMER "ddi" apply_ddi_step!(
-            ws.state.psi, ws.spin_matrices, ws.ddi, ws.ddi_bufs,
-            ws.fft_plans, dt_half, ndim;
-            imaginary_time,
-        )
+        if ws.ddi_padded !== nothing
+            @timeit_debug TIMER "ddi" apply_ddi_step!(
+                ws.state.psi, ws.spin_matrices, ws.ddi, ws.ddi_bufs,
+                ws.fft_plans, dt_half, ndim, ws.ddi_padded;
+                imaginary_time,
+            )
+        else
+            @timeit_debug TIMER "ddi" apply_ddi_step!(
+                ws.state.psi, ws.spin_matrices, ws.ddi, ws.ddi_bufs,
+                ws.fft_plans, dt_half, ndim;
+                imaginary_time,
+            )
+        end
     end
 
     if ws.raman !== nothing
@@ -74,7 +79,7 @@ function _half_potential_step!(ws::Workspace{N}, dt_half, n_comp, ndim, imaginar
 
     @timeit_debug TIMER "diagonal" _diagonal_step_svec!(
         Val(N), ws.state.psi, ws.potential_values, zeeman_diag,
-        ws.interactions.c0, dt_half / 2, ws.density_buf, imaginary_time,
+        ws.interactions.c0, ws.interactions.c_lhy, dt_half / 2, ws.density_buf, imaginary_time,
     )
 end
 
@@ -91,8 +96,8 @@ V(dt/2) K(dt) V(dt/2).
 """
 function _strang_core!(ws::Workspace{N}, dt::Float64, n_comp::Int) where {N}
     _half_potential_step!(ws, dt / 2, n_comp, N, false)
-    _update_kinetic_phase!(ws.kinetic_phase, ws.grid.k_squared, dt)
-    apply_kinetic_step!(ws.state.psi, ws.state.fft_buf, ws.kinetic_phase, ws.fft_plans, n_comp, N)
+    _update_batched_kinetic_phase!(ws.batched_kinetic, ws.grid.k_squared, dt)
+    apply_kinetic_step_batched!(ws.state.psi, ws.batched_kinetic)
     _half_potential_step!(ws, dt / 2, n_comp, N, false)
     nothing
 end
@@ -111,18 +116,18 @@ function _yoshida_core!(ws::Workspace{N}, dt::Float64, n_comp::Int) where {N}
 
     _half_potential_step!(ws, w1 * dt / 2, n_comp, N, false)
 
-    _update_kinetic_phase!(ws.kinetic_phase, ws.grid.k_squared, w1 * dt)
-    apply_kinetic_step!(ws.state.psi, ws.state.fft_buf, ws.kinetic_phase, ws.fft_plans, n_comp, N)
+    _update_batched_kinetic_phase!(ws.batched_kinetic, ws.grid.k_squared, w1 * dt)
+    apply_kinetic_step_batched!(ws.state.psi, ws.batched_kinetic)
 
     _half_potential_step!(ws, wm * dt, n_comp, N, false)
 
-    _update_kinetic_phase!(ws.kinetic_phase, ws.grid.k_squared, w0 * dt)
-    apply_kinetic_step!(ws.state.psi, ws.state.fft_buf, ws.kinetic_phase, ws.fft_plans, n_comp, N)
+    _update_batched_kinetic_phase!(ws.batched_kinetic, ws.grid.k_squared, w0 * dt)
+    apply_kinetic_step_batched!(ws.state.psi, ws.batched_kinetic)
 
     _half_potential_step!(ws, wm * dt, n_comp, N, false)
 
-    _update_kinetic_phase!(ws.kinetic_phase, ws.grid.k_squared, w1 * dt)
-    apply_kinetic_step!(ws.state.psi, ws.state.fft_buf, ws.kinetic_phase, ws.fft_plans, n_comp, N)
+    _update_batched_kinetic_phase!(ws.batched_kinetic, ws.grid.k_squared, w1 * dt)
+    apply_kinetic_step_batched!(ws.state.psi, ws.batched_kinetic)
 
     _half_potential_step!(ws, w1 * dt / 2, n_comp, N, false)
     nothing

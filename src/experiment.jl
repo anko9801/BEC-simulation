@@ -116,13 +116,14 @@ function _parse_system(d::Dict)
     inter = d["interactions"]
     c0 = Float64(inter["c0"])
     c1 = Float64(inter["c1"])
+    c_lhy = Float64(get(inter, "c_lhy", 0.0))
     c_extra = Float64[]
     n = 2
     while haskey(inter, "c$n")
         push!(c_extra, Float64(inter["c$n"]))
         n += 1
     end
-    interactions = InteractionParams(c0, c1, c_extra)
+    interactions = InteractionParams(c0, c1, c_lhy, c_extra)
 
     ddi = if haskey(d, "ddi")
         dd = d["ddi"]

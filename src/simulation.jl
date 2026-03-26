@@ -51,22 +51,13 @@ function _run_simulation_leapfrog!(ws::Workspace{N}, sp, sys, times, energies, n
 ) where {N}
     dt = sp.dt
     n_comp = sys.n_components
-
-    # Batched FFT plans: transform spatial dims, batch over component dim
-    psi_plan_buf = similar(ws.state.psi)
-    dims = ntuple(identity, N)
-    batched_fwd = plan_fft!(psi_plan_buf, dims; flags=FFTW.MEASURE)
-    batched_inv = plan_ifft!(psi_plan_buf, dims; flags=FFTW.MEASURE)
-    kp_bc = reshape(ws.kinetic_phase, size(ws.kinetic_phase)..., 1)
+    bk = ws.batched_kinetic
 
     # Leapfrog: initial half potential step
     _half_potential_step!(ws, dt / 2, n_comp, N, false)
 
     for step in 1:sp.n_steps
-        # Batched kinetic step (all components simultaneously)
-        batched_fwd * ws.state.psi
-        ws.state.psi .*= kp_bc
-        batched_inv * ws.state.psi
+        apply_kinetic_step_batched!(ws.state.psi, bk)
 
         is_save = (step % sp.save_every == 0)
         is_last = (step == sp.n_steps)

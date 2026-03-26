@@ -110,7 +110,12 @@ function total_energy(ws::Workspace{N}) where {N}
         0.0
     end
 
-    E_kin + E_trap + E_zee + E_c0 + E_c1 + E_ddi
+    E_lhy = ws.interactions.c_lhy != 0.0 ? _lhy_energy(psi, ws.interactions.c_lhy, n_comp, N, n_pts, dV) : 0.0
+
+    c2 = get_cn(ws.interactions, 2)
+    E_c2 = c2 != 0.0 ? _nematic_energy(psi, ws.spin_matrices.system.F, c2, N, n_pts, dV) : 0.0
+
+    E_kin + E_trap + E_zee + E_c0 + E_c1 + E_ddi + E_lhy + E_c2
 end
 
 function _kinetic_energy(psi, grid, plans, fft_buf, n_comp, ndim, n_pts, dV)
@@ -148,9 +153,49 @@ function _density_interaction_energy(psi, c0, n_comp, ndim, n_pts, dV)
     0.5 * c0 * sum(n .^ 2) * dV
 end
 
+function _lhy_energy(psi, c_lhy, n_comp, ndim, n_pts, dV)
+    n = total_density(psi, ndim)
+    E = 0.0
+    @inbounds for I in CartesianIndices(n_pts)
+        ni = n[I]
+        E += ni * ni * sqrt(ni)
+    end
+    (2.0 / 5.0) * c_lhy * E * dV
+end
+
 function _spin_interaction_energy(psi, sm, c1, n_comp, ndim, n_pts, dV)
     fx, fy, fz = spin_density_vector(psi, sm, ndim)
     0.5 * c1 * sum(fx .^ 2 .+ fy .^ 2 .+ fz .^ 2) * dV
+end
+
+"""
+Singlet pair amplitude A₀₀(r) = Σ_m (-1)^{F-m} ψ_m(r) ψ_{-m}(r) / √(2F+1).
+
+Returns Array{ComplexF64,N} over spatial points. Non-zero only for integer F.
+For F=1: A₀₀ = (ψ₊₁ψ₋₁ - ψ₀ψ₀ + ψ₋₁ψ₊₁) / √3 = (2ψ₊₁ψ₋₁ - ψ₀²) / √3.
+"""
+function singlet_pair_amplitude(psi::AbstractArray{ComplexF64}, F::Int, ndim::Int)
+    D = 2F + 1
+    n_pts = ntuple(d -> size(psi, d), ndim)
+    A = zeros(ComplexF64, n_pts)
+    inv_sqrt_D = 1.0 / sqrt(Float64(D))
+
+    @inbounds for I in CartesianIndices(n_pts)
+        s = zero(ComplexF64)
+        for c in 1:D
+            m = F - (c - 1)
+            c_pair = D - c + 1
+            sign = iseven(F - m) ? 1.0 : -1.0
+            s += sign * psi[I, c] * psi[I, c_pair]
+        end
+        A[I] = s * inv_sqrt_D
+    end
+    A
+end
+
+function _nematic_energy(psi, F, c2, ndim, n_pts, dV)
+    A = singlet_pair_amplitude(psi, F, ndim)
+    0.5 * c2 * sum(abs2, A) * dV
 end
 
 function _ddi_energy(psi, sm::SpinMatrices{D}, ddi, ddi_bufs, plans, n_comp, ndim, n_pts, dV) where {D}

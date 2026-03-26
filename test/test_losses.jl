@@ -36,19 +36,15 @@
 
         pop_after = [sum(abs2, psi[:, c]) for c in 1:3]
 
-        # m=-1 (c=1) is fully stretched: γ=0, no decay
-        @test pop_after[1] ≈ pop_before[1] rtol = 1e-14
+        # c=1→m=+1, c=2→m=0, c=3→m=-1
+        # (F+m)(F-m+1): m=+1→2*1=2, m=0→1*2=2, m=-1→0*3=0
+        # m=-1 (c=3) is stable: γ=0, no decay
+        @test pop_after[3] ≈ pop_before[3] rtol = 1e-14
 
-        # m=0 (c=2) decays fastest: γ_0 = Γ_dr * 2/(2*3) = Γ_dr/3
+        # m=0 (c=2) and m=+1 (c=1) decay at the same rate for F=1
+        @test pop_after[1] < pop_before[1]
         @test pop_after[2] < pop_before[2]
-
-        # m=+1 (c=3): γ_1 = Γ_dr * 2*1/(2*3) = Γ_dr/3 (same as m=0 for F=1)
-        # Actually: (F+m)(F-m+1) for m=0 is 1*2=2, for m=1 is 2*1=2, for m=-1 is 0*3=0
-        # So m=0 and m=+1 decay at the same rate for F=1
-        @test pop_after[3] ≈ pop_after[2] rtol = 1e-10
-
-        # m=-1 unchanged
-        @test pop_after[1] ≈ pop_before[1] rtol = 1e-14
+        @test pop_after[1] ≈ pop_after[2] rtol = 1e-10
     end
 
     @testset "m-dependent decay (spin-2)" begin
@@ -67,25 +63,25 @@
 
         pop_after = [sum(abs2, psi[:, c]) for c in 1:5]
 
-        # Components: c=1→m=-2, c=2→m=-1, c=3→m=0, c=4→m=1, c=5→m=2
+        # Components: c=1→m=+2, c=2→m=+1, c=3→m=0, c=4→m=-1, c=5→m=-2
         # γ_m = Γ * (F+m)(F-m+1) / (2F(2F+1))
-        # m=-2: (0)(5)/20 = 0      (stable)
-        # m=-1: (1)(4)/20 = 4/20
+        # m=+2: (4)(1)/20 = 4/20
+        # m=+1: (3)(2)/20 = 6/20   (maximum)
         # m=0:  (2)(3)/20 = 6/20   (maximum)
-        # m=1:  (3)(2)/20 = 6/20
-        # m=2:  (4)(1)/20 = 4/20
+        # m=-1: (1)(4)/20 = 4/20
+        # m=-2: (0)(5)/20 = 0      (stable)
 
-        # m=-2 unchanged
-        @test pop_after[1] ≈ pop_before[1] rtol = 1e-14
+        # m=-2 (c=5) unchanged
+        @test pop_after[5] ≈ pop_before[5] rtol = 1e-14
 
-        # m=0 and m=1 decay at same rate (both 6/20)
-        @test pop_after[3] ≈ pop_after[4] rtol = 1e-10
+        # m=+1 (c=2) and m=0 (c=3) decay at same rate (both 6/20)
+        @test pop_after[2] ≈ pop_after[3] rtol = 1e-10
 
-        # m=-1 and m=2 decay at same rate (both 4/20)
-        @test pop_after[2] ≈ pop_after[5] rtol = 1e-10
+        # m=+2 (c=1) and m=-1 (c=4) decay at same rate (both 4/20)
+        @test pop_after[1] ≈ pop_after[4] rtol = 1e-10
 
-        # m=0 decays more than m=-1
-        @test pop_after[3] < pop_after[2]
+        # m=0 (c=3) decays more than m=+2 (c=1)
+        @test pop_after[3] < pop_after[1]
     end
 
     @testset "Density dependence" begin
@@ -325,9 +321,11 @@
         apply_loss_step!(psi, loss, 1, 0.01, 3, 2)
         pop_after = [sum(abs2, psi[:, :, c]) for c in 1:3]
 
-        # m=-1 (c=1) unchanged
-        @test pop_after[1] ≈ pop_before[1] rtol = 1e-14
-        # m=0,+1 decay
+        # c=1→m=+1, c=2→m=0, c=3→m=-1
+        # m=-1 (c=3) unchanged
+        @test pop_after[3] ≈ pop_before[3] rtol = 1e-14
+        # m=+1,0 decay
+        @test pop_after[1] < pop_before[1]
         @test pop_after[2] < pop_before[2]
     end
 end

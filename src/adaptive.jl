@@ -65,12 +65,7 @@ function run_simulation_adaptive!(ws::Workspace{N};
 
     dt = clamp(adaptive.dt_init, adaptive.dt_min, adaptive.dt_max)
     current_kinetic_dt = NaN
-
-    psi_plan_buf = similar(ws.state.psi)
-    dims = ntuple(identity, N)
-    batched_fwd = plan_fft!(psi_plan_buf, dims; flags=FFTW.MEASURE)
-    batched_inv = plan_ifft!(psi_plan_buf, dims; flags=FFTW.MEASURE)
-    kp_bc = reshape(ws.kinetic_phase, size(ws.kinetic_phase)..., 1)
+    bk = ws.batched_kinetic
 
     times = Float64[]
     energies = Float64[]
@@ -99,7 +94,7 @@ function run_simulation_adaptive!(ws::Workspace{N};
         may_reject = !is_clamped && dt_step > adaptive.dt_min * 1.01
 
         if dt_step != current_kinetic_dt
-            _update_kinetic_phase!(ws.kinetic_phase, ws.grid.k_squared, dt_step)
+            _update_batched_kinetic_phase!(bk, ws.grid.k_squared, dt_step)
             current_kinetic_dt = dt_step
         end
 
@@ -121,9 +116,7 @@ function run_simulation_adaptive!(ws::Workspace{N};
         end
         fsal_deferred = false
 
-        batched_fwd * ws.state.psi
-        ws.state.psi .*= kp_bc
-        batched_inv * ws.state.psi
+        apply_kinetic_step_batched!(ws.state.psi, bk)
 
         rel_change = 0.0
         if may_reject
