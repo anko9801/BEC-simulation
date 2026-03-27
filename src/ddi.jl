@@ -9,6 +9,7 @@ function _build_q_tensor!(Q_xx, Q_xy, Q_xz, Q_yy, Q_yz, Q_zz,
                           secular::Bool=false) where {N}
     @inbounds for I in CartesianIndices(n_pts)
         k2 = k_squared[I]
+        # Q(k=0) is undefined (0/0); physically the mean dipole field vanishes by symmetry
         k2 == 0.0 && continue
 
         kv_x = kx[I[1]]

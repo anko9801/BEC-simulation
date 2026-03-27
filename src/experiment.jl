@@ -115,16 +115,23 @@ function _parse_system(d::Dict)
     box_size = _to_float_vec(g["box_size"])
 
     inter = d["interactions"]
-    c0 = Float64(inter["c0"])
-    c1 = Float64(inter["c1"])
-    c_lhy = Float64(get(inter, "c_lhy", 0.0))
-    c_extra = Float64[]
-    n = 2
-    while haskey(inter, "c$n")
-        push!(c_extra, Float64(inter["c$n"]))
-        n += 1
+    interactions = if haskey(inter, "c_total")
+        c_total = Float64(inter["c_total"])
+        c1_ratio = Float64(get(inter, "c1_ratio", 0.0))
+        F_atom = resolve_atom(atom_name).F
+        interaction_params_from_constraint(; c_total, c1_ratio, F=F_atom)
+    else
+        c0 = Float64(inter["c0"])
+        c1 = Float64(inter["c1"])
+        c_lhy = Float64(get(inter, "c_lhy", 0.0))
+        c_extra = Float64[]
+        n = 2
+        while haskey(inter, "c$n")
+            push!(c_extra, Float64(inter["c$n"]))
+            n += 1
+        end
+        InteractionParams(c0, c1, c_lhy, c_extra)
     end
-    interactions = InteractionParams(c0, c1, c_lhy, c_extra)
 
     ddi = if haskey(d, "ddi")
         dd = d["ddi"]

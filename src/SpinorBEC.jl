@@ -69,6 +69,7 @@ export Rb87, Na23, Eu151
 
 # Interactions
 export compute_interaction_params, compute_interaction_params_general_f, compute_c0, compute_c_dd, compute_a_dd
+export interaction_params_from_constraint, compute_c_total, compute_c_dd_dimless, linear_zeeman_p
 
 # DDI
 export DDIParams, DDIBuffers, DDIPaddedContext, make_ddi_params, make_ddi_buffers, make_ddi_padded

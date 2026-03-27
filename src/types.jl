@@ -69,10 +69,24 @@ struct AtomSpecies
     a0::Float64         # m (F_tot=0 scattering length)
     a2::Float64         # m (F_tot=2 scattering length)
     mu_mag::Float64     # J/T (magnetic dipole moment, 0.0 for non-dipolar)
+    g_F::Float64        # Landé g-factor
     scattering_lengths::Dict{Int,Float64}  # S => a_S for total spin channels
 
-    function AtomSpecies(name, mass, F, a0, a2, mu_mag, scattering_lengths)
-        new(name, mass, F, a0, a2, mu_mag, scattering_lengths)
+    function AtomSpecies(name, mass, F, a0, a2, mu_mag, g_F, scattering_lengths)
+        new(name, mass, F, a0, a2, mu_mag, g_F, scattering_lengths)
+    end
+
+    function AtomSpecies(name, mass, F, a0, a2, mu_mag, g_F::Real)
+        sl = if F == 1 && (a0 != 0.0 || a2 != 0.0)
+            Dict{Int,Float64}(0 => a0, 2 => a2)
+        else
+            Dict{Int,Float64}()
+        end
+        new(name, mass, F, a0, a2, mu_mag, Float64(g_F), sl)
+    end
+
+    function AtomSpecies(name, mass, F, a0, a2, mu_mag, scattering_lengths::Dict)
+        new(name, mass, F, a0, a2, mu_mag, 0.0, scattering_lengths)
     end
 
     function AtomSpecies(name, mass, F, a0, a2, mu_mag)
@@ -81,7 +95,7 @@ struct AtomSpecies
         else
             Dict{Int,Float64}()
         end
-        new(name, mass, F, a0, a2, mu_mag, sl)
+        new(name, mass, F, a0, a2, mu_mag, 0.0, sl)
     end
 end
 

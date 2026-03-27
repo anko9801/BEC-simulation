@@ -99,6 +99,11 @@ function make_workspace(;
 
     tensor_cache = make_tensor_interaction_cache(atom.F, interactions)
 
+    if tensor_cache !== nothing && (abs(interactions.c0) > 1e-30 || abs(interactions.c1) > 1e-30)
+        @warn "tensor_cache active with non-zero c0/c1 in InteractionParams — " *
+              "this causes double-counting. Set c0=c1=0 when using higher-rank channels."
+    end
+
     Workspace(
         state, plans, kinetic_phase, V, density_buf, sm, grid, atom, interactions, zeeman, potential, sim_params,
         ddi, ddi_bufs, raman, loss, ddi_pad, batched_kinetic, tensor_cache,

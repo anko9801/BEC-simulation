@@ -99,3 +99,47 @@ function compute_interaction_params_dimless(atom::AtomSpecies; N_atoms::Int=1, d
     energy_scale = hbar * omega
     InteractionParams(params_si.c0 / energy_scale, params_si.c1 / energy_scale)
 end
+
+"""
+    interaction_params_from_constraint(; c_total, c1_ratio, F)
+
+Compute c₀, c₁ satisfying the constraint c₀ + F²c₁ = c_total.
+
+Given ratio r = c₁/c₀:
+  c₀ = c_total / (1 + F²r)
+  c₁ = r × c₀
+"""
+function interaction_params_from_constraint(; c_total::Float64, c1_ratio::Float64, F::Int)
+    c0 = c_total / (1.0 + F^2 * c1_ratio)
+    c1 = c1_ratio * c0
+    InteractionParams(c0, c1)
+end
+
+"""
+    compute_c_total(atom; N_atoms, omega_ref)
+
+Total contact interaction c_total = 4π(a_s/a_ho)N in dimensionless units (3D).
+"""
+function compute_c_total(atom::AtomSpecies; N_atoms::Int, omega_ref::Float64)
+    a_ho = sqrt(Units.HBAR / (atom.mass * omega_ref))
+    4π * (atom.a0 / a_ho) * N_atoms
+end
+
+"""
+    compute_c_dd_dimless(atom; N_atoms, omega_ref)
+
+Dimensionless DDI coupling: c_dd = N × μ₀μ² / (ℏω × a_ho³).
+"""
+function compute_c_dd_dimless(atom::AtomSpecies; N_atoms::Int, omega_ref::Float64)
+    a_ho = sqrt(Units.HBAR / (atom.mass * omega_ref))
+    N_atoms * compute_c_dd(atom) / (Units.HBAR * omega_ref * a_ho^3)
+end
+
+"""
+    linear_zeeman_p(atom, B, omega_ref)
+
+Dimensionless linear Zeeman shift: p = g_F × μ_B × B / (ℏ × omega_ref).
+"""
+function linear_zeeman_p(atom::AtomSpecies, B::Float64, omega_ref::Float64)
+    atom.g_F * Units.MU_BOHR * B / (Units.HBAR * omega_ref)
+end

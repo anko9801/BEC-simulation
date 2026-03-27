@@ -35,7 +35,7 @@
 #   1 ms  ≈ 0.691 ω⁻¹
 #   B = 2.6 nT → p ≈ 0.39
 #   c0    ≈ 4689
-#   c1    = 0  (scattering lengths unknown)
+#   c1/c0 = 1/36 (Buchachenko AFM estimate; set c1_ratio: 0.0 for DDI-only)
 #   c_dd  ≈ 7647
 #   ε_dd  ≈ 0.544
 # ================================================================
@@ -49,8 +49,8 @@ experiment:
       n_points: [64, 64, 64]
       box_size: [20.0, 20.0, 20.0]
     interactions:
-      c0: 4689.0
-      c1: 0.0
+      c_total: 4689.0
+      c1_ratio: 0.02778  # 1/36, Buchachenko AFM estimate
     ddi:
       enabled: true
       c_dd: 7647.0
