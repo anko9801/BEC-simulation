@@ -74,7 +74,7 @@ function apply_nematic_step!(
                     sh = sinh(absV * dt)
                     phase = V / absV
                     psi[I, c] = ch * psi_m - phase * sh * conj(psi_neg)
-                    psi[I, c_pair] = ch * psi_neg + conj(phase) * sh * conj(psi_m)
+                    psi[I, c_pair] = ch * psi_neg + phase * sh * conj(psi_m)
                 end
             end
         else
@@ -95,7 +95,7 @@ function apply_nematic_step!(
                     psi_m = psi[I, c]
                     psi_neg = psi[I, c_pair]
                     psi[I, c] = cosV * psi_m - im * phase * sinV * conj(psi_neg)
-                    psi[I, c_pair] = cosV * psi_neg + im * conj(phase) * sinV * conj(psi_m)
+                    psi[I, c_pair] = cosV * psi_neg + im * phase * sinV * conj(psi_m)
                 end
             end
         end

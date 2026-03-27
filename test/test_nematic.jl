@@ -135,6 +135,44 @@
         @test abs(N1 - N0) / N0 < 1e-12
     end
 
+    @testset "apply_nematic_step! per-pair norm with complex A₀₀ (F=1)" begin
+        psi = zeros(ComplexF64, 1, 3)
+        psi[1, 1] = 0.5 * cis(0.7)
+        psi[1, 2] = 0.3 + 0.2im
+        psi[1, 3] = 0.4 * cis(-0.3)
+        interactions = InteractionParams(10.0, -0.5, [50.0])
+
+        pair_norm_before = abs2(psi[1, 1]) + abs2(psi[1, 3])
+
+        apply_nematic_step!(psi, interactions, 1, 0.05, 1)
+
+        pair_norm_after = abs2(psi[1, 1]) + abs2(psi[1, 3])
+
+        # (m=+1, m=-1) pair norm is exactly conserved by Bogoliubov transform
+        @test abs(pair_norm_after - pair_norm_before) < 1e-14
+    end
+
+    @testset "apply_nematic_step! per-pair norm with complex A₀₀ (F=2)" begin
+        psi = zeros(ComplexF64, 1, 5)
+        psi[1, 1] = 0.4 * cis(0.5)    # m=+2
+        psi[1, 2] = 0.3 * cis(-0.8)   # m=+1
+        psi[1, 3] = 0.2 + 0.1im       # m=0
+        psi[1, 4] = 0.35 * cis(1.2)   # m=-1
+        psi[1, 5] = 0.25 * cis(-0.3)  # m=-2
+        interactions = InteractionParams(10.0, -0.5, [30.0])
+
+        pair1_before = abs2(psi[1, 1]) + abs2(psi[1, 5])  # (m=2, m=-2)
+        pair2_before = abs2(psi[1, 2]) + abs2(psi[1, 4])  # (m=1, m=-1)
+
+        apply_nematic_step!(psi, interactions, 2, 0.05, 1)
+
+        pair1_after = abs2(psi[1, 1]) + abs2(psi[1, 5])
+        pair2_after = abs2(psi[1, 2]) + abs2(psi[1, 4])
+
+        @test abs(pair1_after - pair1_before) < 1e-14
+        @test abs(pair2_after - pair2_before) < 1e-14
+    end
+
     @testset "apply_nematic_step! ITP norm decrease" begin
         config = GridConfig(64, 20.0)
         grid = make_grid(config)
