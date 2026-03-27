@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-# Run all tests (4808 cases)
+# Run all tests (8977 cases)
 julia --project=. -e 'using Pkg; Pkg.test()'
 
 # Run a single test file
@@ -35,10 +35,11 @@ All propagators use ℏ=m=1. Physical quantities are scaled via `harmonic_scales
 
 ```
 types → units → grid → spin_matrices → spinor_utils → atoms → interactions →
-potentials → zeeman → propagators → spin_mixing → losses → split_step →
-raman → ddi → optical_trap → optics → laser_potential → thomas_fermi →
-fft_utils → observables → diagnostics → majorana → simulation → io →
-experiment → experiment_runner → unitful_support
+potentials → zeeman → propagators → spin_mixing → nematic → losses → split_step →
+raman → ddi → ddi_padded → optical_trap → optics → laser_potential → thomas_fermi →
+fft_utils → observables → energy → currents → vorticity → diagnostics → majorana →
+simulation_utils → initialization → ground_state → simulation → adaptive → yoshida →
+io → experiment → experiment_runner → unitful_support
 ```
 
 ### Core Types (`types.jl`)
@@ -79,7 +80,7 @@ Instrumented with `@timeit_debug TIMER` on all sub-steps for profiling.
 
 **Spin mixing** (`spin_mixing.jl`): skips when `c1 ≈ 0`. D=3: Rodrigues' formula (machine-precision unitarity). D>3: Euler angle decomposition with O(D) spin expectation via raising/lowering operators and O(D²) rotation via Fy eigendecomposition.
 
-**DDI** (`ddi.jl`): k-space convolution with tensor `Q_αβ(k) = k̂_αk̂_β - δ_αβ/3`. Uses Euler angle rotation for applying DDI potential (shared code with spin mixing).
+**DDI** (`ddi.jl` + `ddi_padded.jl`): k-space convolution with tensor `Q_αβ(k) = k̂_αk̂_β - δ_αβ/3`. Shared `_build_q_tensor!` helper used by both padded and unpadded paths. Uses Euler angle rotation for applying DDI potential (shared code with spin mixing).
 
 **Losses** (`losses.jl`): density-dependent dipolar relaxation with m-dependent rate `γ_m = Γ_dr × (F+m)(F-m+1) / (2F(2F+1))`. m=-F is stable.
 
