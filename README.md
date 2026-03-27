@@ -145,22 +145,34 @@ Spin matrices for arbitrary $F$ are constructed from angular momentum algebra.
 
 ### Strang Splitting (2nd-order Symmetric)
 
+Each time step $S_2(\Delta t)$ consists of:
+
 ```
-1. Half potential step (dt/2):
-   a. 1/4 diagonal potential (trap + Zeeman + c0 * density)
-   b. 1/2 spin mixing (c1 interaction, matrix exponential)
-   c. [DDI substep (if enabled)]
-   d. [Raman substep (if enabled)]
-   e. 1/4 diagonal potential (density recomputed)
-2. Full kinetic step (dt):
-   FFT → multiply by exp(-ik²dt/2) → IFFT
-3. Half potential step (dt/2):
-   mirror of step 1
+1. Half potential step V(dt/2) — symmetric inner splitting:
+     diag(dt/4) → SM(dt/4) → nematic(dt/4) → Raman(dt/4)
+       → DDI(dt/2) →
+     Raman(dt/4) → nematic(dt/4) → SM(dt/4) → diag(dt/4)
+
+2. Full kinetic step K(dt):
+     Batched FFT → multiply by exp(-ik²dt/2) → batched IFFT
+
+3. Half potential step V(dt/2):
+     mirror of step 1
+
+4. Loss step (real-time only, if enabled)
 ```
 
-Spin mixing is automatically skipped when $c_1 \approx 0$ (e.g., ${}^{151}$Eu). Uses Rodrigues' formula for spin-1; eigendecomposition via `_exp_i_hermitian` for higher spins.
+All non-commuting operators within the potential step are symmetrized for 2nd-order accuracy. DDI is innermost (most expensive: 6 FFTs). Each substep is skipped when its coupling constant is negligible (e.g., spin mixing when $c_1 \approx 0$, nematic when $c_2 = 0$).
 
-For real-time dynamics, a leapfrog-fused loop merges adjacent half potential steps $V(\Delta t/2) + V(\Delta t/2) = V(\Delta t)$ between time steps, splitting only at snapshot save points. Kinetic steps use batched FFT over all spinor components.
+**Spin mixing** (`spin_mixing.jl`): $D=3$: Rodrigues' formula (machine-precision unitarity). $D>3$: Euler angle decomposition — $O(D)$ spin expectation via raising/lowering operators and $O(D^2)$ rotation via cached $F_y$ eigendecomposition.
+
+**Nematic** (`nematic.jl`): Bogoliubov-type coupling of $(m, -m)$ pairs via singlet pair amplitude $A_{00}$, conserving $|\psi_m|^2 + |\psi_{-m}|^2$ per pair.
+
+**DDI** (`ddi.jl` + `ddi_padded.jl`): $k$-space convolution with $Q_{\alpha\beta}(\mathbf{k}) = \hat{k}_\alpha \hat{k}_\beta - \delta_{\alpha\beta}/3$, applied via Euler angle spin rotation. Optional zero-padded convolution (2$\times$ grid in each dim) for reduced aliasing.
+
+**Kinetic step** (`propagators.jl`): Batched FFT — single forward/inverse FFT for all $D$ spinor components simultaneously (vs $D$ individual FFTs). Uses `BatchedKineticCache` with pre-allocated work array.
+
+For real-time dynamics, a leapfrog-fused loop merges adjacent half potential steps $V(\Delta t/2) + V(\Delta t/2) = V(\Delta t)$ between time steps, splitting only at snapshot save points.
 
 ### Imaginary-Time Propagation (Ground State Search)
 
@@ -188,10 +200,19 @@ Both `run_simulation_adaptive!` (Strang) and `run_simulation_yoshida!` support a
 - FSAL (first same as last) optimization for Strang
 - Configurable via `AdaptiveDtParams(dt_init, dt_min, dt_max, tol)`
 
+Benchmark on ${}^{151}$Eu 3D (32$^3$, 5 ms, $c_1 = 0$):
+
+| Tolerance | Yoshida steps | Strang steps | Speedup |
+|-----------|--------------|-------------|---------|
+| 0.05 | 71 | 532 | 2.3$\times$ |
+| 0.01 | 77 | 1199 | 4.6$\times$ |
+| 0.005 | 86 | 1699 | 4.9$\times$ |
+
 ### Real-Time Dynamics
 
 - Multi-phase sequences (output of phase $n$ feeds into phase $n+1$)
 - `TimeDependentZeeman` for linear ramps of $p(t)$, $q(t)$
+- Noise seeding: `noise_amplitude` in YAML phase config breaks symmetry (required for e.g. ${}^{151}$Eu EdH instability)
 - Callback functions for intermediate state access
 - Adaptive time step with Strang or Yoshida integrators
 
@@ -323,22 +344,89 @@ Unitful.jl quantities are accepted directly as input.
 | PlotlyJS | `plot_density`, `plot_spinor`, `plot_spin_texture`, `animate_dynamics` |
 | Makie | 3D surfaces, volume rendering, real-time animation |
 
+## Performance
+
+### Large-$D$ Optimization ($D = 13$ for ${}^{151}$Eu)
+
+`SMatrix{13,13,ComplexF64}` (2704 bytes, 169 elements) exceeds the StaticArrays stack threshold, causing heap allocation in tight loops. Key optimizations:
+
+- **Spin expectation**: $O(D)$ raising/lowering operators for $\langle\mathbf{F}\rangle$ instead of $O(D^2)$ matrix-vector
+- **Euler rotation**: `MVector{D}` scratch buffers and `Matrix` eigendecomposition (not `SMatrix`) — only 1 `SVector` at output
+- **$F_y$ eigencache**: `SpinMatrices` stores `Fy_eigvecs`, `Fy_eigvecs_adj`, `Fy_eigvals` — avoids repeated eigendecomposition
+- **cis recurrence**: $F_y$ eigenvalues are integers $(-F \ldots F)$ → `cis(m \cdot \theta) = cis(\theta)^m$, reducing 65 `cis` calls to 6 + recurrence for $D=13$
+
+Result: 167 GiB $\to$ 43 MiB allocation, 698 $\to$ 122 ms/step (5.7$\times$ speedup) on ${}^{151}$Eu 32$^3$.
+
+### General Optimizations
+
+- **Batched FFT**: single forward + inverse FFT for all $D$ components (vs $2D$ individual FFTs)
+- **DDI FFT reduction**: 6 FFTs per DDI step (FFT $F_x, F_y, F_z$ once, reuse in $k$-space)
+- **Fused diagonal step**: single-pass loop combining trap + Zeeman + $c_0 n$ + LHY
+- **FFTW planning**: `FFTW.MEASURE` flag for optimized FFT plans; `save_fftw_wisdom`/`load_fftw_wisdom` for persistence across sessions
+- **`cis(-x)`** replaces `exp(-im*x)` in all propagators (avoids complex multiply)
+
+### Performance Pitfalls
+
+- **`Threads.@threads` closures** can box captured untyped arguments → massive allocations (65 MiB/call for $D=13$). Prefer plain `@inbounds for` loops for element-wise operations.
+- **`Val(ndim::Int)`** causes dynamic dispatch. Always use `Val(N)` from a type parameter.
+- **`ntuple(f, ndim::Int)`** returns type-unstable tuple. Use `ntuple(f, Val(N))`.
+
+## Tracing / Profiling
+
+All substeps in `split_step!` are instrumented with `@timeit_debug TIMER` from TimerOutputs.jl (zero-cost when disabled):
+
+```julia
+using SpinorBEC
+enable_tracing!()    # compile-time enable
+reset_tracing!()     # clear counters
+# ... run simulation ...
+println(TIMER)       # hierarchical timing report
+disable_tracing!()
+```
+
+Benchmark scripts in `scripts/` (e.g., `bench_eu151.jl`) include tracing setup.
+
 ## Source Organization
 
-| File | Responsibility |
-|------|---------------|
-| `types.jl` | All struct definitions (must be included first) |
-| `observables.jl` | Density, norm, magnetization, spin density, singlet pair amplitude |
-| `energy.jl` | `total_energy` and all energy component helpers |
-| `currents.jl` | Probability current, superfluid velocity, angular momentum |
-| `vorticity.jl` | Superfluid vorticity, Berry curvature, skyrmion charge |
-| `ddi.jl` | Core DDI: Q tensor, k-space convolution, unpadded DDI step |
-| `ddi_padded.jl` | Zero-padded DDI convolution for reduced aliasing |
-| `adaptive.jl` | Adaptive Strang integration with FSAL |
-| `yoshida.jl` | Adaptive Yoshida 4th-order integration |
-| `split_step.jl` | Strang/Yoshida core splitting routines |
-| `spin_mixing.jl` | Spin-dependent contact interaction step |
-| `losses.jl` | Dipolar relaxation and 3-body loss |
+| File | Lines | Responsibility |
+|------|-------|---------------|
+| `types.jl` | | All struct definitions (`GridConfig`, `Workspace`, `SimState`, etc.) |
+| `units.jl` | | SI constants, `DimensionlessScales`, harmonic oscillator unit conversion |
+| `grid.jl` | | `make_grid`, `make_fft_plans`, FFT wavenumber arrays |
+| `spin_matrices.jl` | | `SpinMatrices{D}` construction, $F_x, F_y, F_z$ static matrices, $F_y$ eigencache |
+| `spinor_utils.jl` | | `_get_spinor`/`_set_spinor!`, `_apply_euler_spin_rotation`, `_exp_i_hermitian` |
+| `atoms.jl` | | `AtomSpecies` definitions: `Rb87`, `Na23`, `Eu151` |
+| `interactions.jl` | | `InteractionParams`, `compute_c0`, `compute_c_dd`, `get_cn` |
+| `potentials.jl` | | `HarmonicTrap`, `GravityPotential`, `CompositePotential`, `evaluate_potential` |
+| `zeeman.jl` | | `ZeemanParams`, `TimeDependentZeeman`, `zeeman_diagonal` |
+| `propagators.jl` | | `apply_kinetic_step!`, `apply_kinetic_step_batched!`, `apply_diagonal_potential_step!` |
+| `spin_mixing.jl` | | $c_1$ spin-dependent interaction: Rodrigues' ($D=3$), Euler rotation ($D>3$) |
+| `nematic.jl` | | $c_2$ singlet pair interaction: Bogoliubov $(m, -m)$ pair coupling |
+| `losses.jl` | | Dipolar relaxation ($m$-dependent rates), 3-body loss |
+| `split_step.jl` | | `split_step!`, `_half_potential_step!`, `_strang_core!`, `_yoshida_core!` |
+| `raman.jl` | | `RamanCoupling`, two-photon Raman transition step |
+| `ddi.jl` | | Core DDI: `_build_q_tensor!`, $k$-space convolution, unpadded step |
+| `ddi_padded.jl` | | Zero-padded DDI convolution (2$\times$ grid, reduced aliasing) |
+| `optical_trap.jl` | | `GaussianBeam`, `CrossedDipoleTrap` |
+| `optics.jl` | | `OpticalBeam`, ABCD propagation, fiber coupling |
+| `laser_potential.jl` | | `LaserBeamPotential`, crossed laser trap |
+| `thomas_fermi.jl` | | Thomas-Fermi density profile, chemical potential bisection |
+| `fft_utils.jl` | | `_fft_partial_derivative`, `_fft_gradient` (N-dim) |
+| `observables.jl` | | Density, norm, magnetization, spin density, singlet pair amplitude |
+| `energy.jl` | | `total_energy` and all energy component helpers |
+| `currents.jl` | | Probability current, superfluid velocity, angular momentum |
+| `vorticity.jl` | | Superfluid vorticity, Berry curvature, skyrmion charge |
+| `diagnostics.jl` | | Healing lengths, spin mixing period, phase diagram coordinates |
+| `majorana.jl` | | Majorana polynomial → stars on $S^2$, Steinhardt $Q_6$ order parameter |
+| `simulation_utils.jl` | | `_record_snapshot!`, `_check_energy_drift`, shared simulation helpers |
+| `initialization.jl` | | `init_psi`, initial state construction (polar, ferromagnetic, uniform) |
+| `ground_state.jl` | | `find_ground_state` — imaginary-time propagation |
+| `simulation.jl` | | `run_simulation!`, `make_workspace` |
+| `adaptive.jl` | | Adaptive Strang integration with FSAL, PI controller |
+| `yoshida.jl` | | Adaptive Yoshida 4th-order integration with embedded error estimator |
+| `io.jl` | | `save_state`/`load_state` (JLD2 format) |
+| `experiment.jl` | | YAML schema: `ExperimentConfig`, `PhaseConfig`, `GroundStateConfig` |
+| `experiment_runner.jl` | | `run_experiment`, noise seeding, multi-phase execution |
 
 ## Testing
 

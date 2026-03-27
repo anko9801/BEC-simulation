@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-# Run all tests (8977 cases)
+# Run all tests (8982 cases)
 julia --project=. -e 'using Pkg; Pkg.test()'
 
 # Run a single test file
@@ -49,7 +49,7 @@ io → experiment → experiment_runner → unitful_support
 - `SpinSystem(F)` — spin quantum number, `n_components = 2F+1`
 - `SpinMatrices{D}` — static spin-F matrices (Fx, Fy, Fz, F·F) as `SMatrix`
 - `SimState{N,A}` — mutable: wavefunction `psi`, time, step counter
-- `Workspace{N,A,P,IP,SM,ZEE,DDI,DDIB,RAM,LOSS}` — fully parameterized immutable container holding all simulation state
+- `Workspace{N,A,P,IP,SM,ZEE,DDI,DDIB,RAM,LOSS,DDIP,BK}` — fully parameterized (12 type params) immutable container holding all simulation state
 - `AdaptiveDtParams` — adaptive time-stepping parameters (dt_init, dt_min, dt_max, tol)
 - `LossParams` — dipolar relaxation and 3-body loss parameters
 
@@ -71,9 +71,10 @@ All loops use `CartesianIndices(n_pts)` — no specialized 1D/2D/3D code paths. 
 ### Split-Step Pipeline (`split_step.jl`)
 
 Strang splitting (2nd order symmetric):
-1. Half potential step (diagonal potential + spin mixing + DDI + Raman)
-2. Full kinetic step (FFT → multiply phase → IFFT, per component)
-3. Half potential step (mirror)
+1. Half potential step — symmetric inner splitting:
+   `diag(dt/4) → SM(dt/4) → nematic(dt/4) → Raman(dt/4) → DDI(dt/2) → Raman(dt/4) → nematic(dt/4) → SM(dt/4) → diag(dt/4)`
+2. Full kinetic step (batched FFT → multiply phase → batched IFFT)
+3. Half potential step (mirror of step 1)
 4. Loss step (if enabled, real-time only)
 
 Instrumented with `@timeit_debug TIMER` on all sub-steps for profiling.
