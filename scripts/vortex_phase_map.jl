@@ -51,8 +51,8 @@ show_components = [1, 3, 5, 7]  # m=+6, +4, +2, 0
 
 println("Using per-component phase masking (5% of own peak)")
 
-snap_indices = length(snapshots) <= 4 ? (1:length(snapshots)) : [1, length(snapshots)÷2, length(snapshots)]
-println("Using $(length(snap_indices)) of $(length(snapshots)) snapshots")
+snap_indices = collect(1:length(snapshots))
+println("Using all $(length(snap_indices)) snapshots")
 
 snap_data = []
 for si in snap_indices
