@@ -23,14 +23,14 @@ experiment:
   system:
     atom: Eu151
     grid:
-      n_points: [32, 32, 32]
+      n_points: [64, 64, 64]
       box_size: [20.0, 20.0, 20.0]
     interactions:
       c0: 4689.0
-      c1: 130.0
+      c1: 0.0
     ddi:
       enabled: true
-      c_dd: 609.0
+      c_dd: 7647.0
 
   ground_state:
     dt: 0.005

@@ -14,7 +14,7 @@
 # Experimental conditions:
 #   Trap: (ωx, ωy, ωz)/(2π) = (110, 110, 130) Hz — nearly spherical
 #   N = 5×10⁴ atoms
-#   c₁/c₀ = 1/36 (antiferromagnetic spin-exchange)
+#   c₁ = 0 (a_F unknown for Eu151; DDI is sole spin-dependent interaction)
 #   B = 2.6 nT (NOT zero)
 #   g_F = 7/6, μ = 7 μ_B
 #   Observation up to 40 ms
@@ -28,16 +28,16 @@
 #   p = g_F × μ_B × B / (ℏ ω_ref)
 #   t_dimless = t_SI × ω_ref
 #   c0 = 4π × (a_s / a_ho) × N  (3D)
-#   c_dd = C_dd × N / (ℏ ω_ref × a_ho³)  (3D)
+#   c_dd = N × μ₀μ² / (ℏ ω_ref × a_ho³)  (3D)
 #
 # === Reference values (ω_ref = 2π × 110 Hz) ===
 #   a_ho  ≈ 0.780 μm
 #   1 ms  ≈ 0.691 ω⁻¹
 #   B = 2.6 nT → p ≈ 0.39
 #   c0    ≈ 4689
-#   c1    ≈ 130  (= c0/36)
-#   c_dd  ≈ 609
-#   ε_dd  ≈ 0.545
+#   c1    = 0  (scattering lengths unknown)
+#   c_dd  ≈ 7647
+#   ε_dd  ≈ 0.544
 # ================================================================
 
 experiment:
@@ -46,14 +46,14 @@ experiment:
   system:
     atom: Eu151
     grid:
-      n_points: [32, 32, 32]
+      n_points: [64, 64, 64]
       box_size: [20.0, 20.0, 20.0]
     interactions:
       c0: 4689.0
-      c1: 130.0
+      c1: 0.0
     ddi:
       enabled: true
-      c_dd: 609.0
+      c_dd: 7647.0
 
   # Fully polarized ground state at high field
   ground_state:
@@ -87,8 +87,8 @@ experiment:
     # 40 ms ≈ 27.6 ω⁻¹
     - name: spin_relaxation
       duration: 27.6
-      dt: 0.001
-      save_every: 20
+      dt: 0.002
+      save_every: 50
       noise_amplitude: 0.001
       zeeman:
         p: 0.39
