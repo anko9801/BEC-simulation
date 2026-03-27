@@ -75,13 +75,13 @@ function _half_potential_step!(ws::Workspace{N}, dt_half, n_comp, ndim, imaginar
         if ws.ddi_padded !== nothing
             @timeit_debug TIMER "ddi" apply_ddi_step!(
                 ws.state.psi, ws.spin_matrices, ws.ddi, ws.ddi_bufs,
-                ws.fft_plans, dt_half, ndim, ws.ddi_padded;
+                dt_half, ndim, ws.ddi_padded;
                 imaginary_time,
             )
         else
             @timeit_debug TIMER "ddi" apply_ddi_step!(
                 ws.state.psi, ws.spin_matrices, ws.ddi, ws.ddi_bufs,
-                ws.fft_plans, dt_half, ndim;
+                dt_half, ndim;
                 imaginary_time,
             )
         end

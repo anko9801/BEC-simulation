@@ -44,10 +44,9 @@
         psi = init_psi(grid, sys; state=:uniform)
         ddi = make_ddi_params(grid, Eu151)
         bufs = make_ddi_buffers(grid.config.n_points)
-        plans = make_fft_plans(grid.config.n_points)
 
         N0 = total_norm(psi, grid)
-        apply_ddi_step!(psi, sm, ddi, bufs, plans, 0.001, 1; imaginary_time=false)
+        apply_ddi_step!(psi, sm, ddi, bufs, 0.001, 1; imaginary_time=false)
         N1 = total_norm(psi, grid)
 
         @test abs(N1 - N0) / N0 < 1e-10
@@ -61,10 +60,9 @@
         psi = init_psi(grid, sys; state=:ferromagnetic)
         ddi = make_ddi_params(grid, Eu151)
         bufs = make_ddi_buffers(grid.config.n_points)
-        plans = make_fft_plans(grid.config.n_points)
 
         M0 = magnetization(psi, grid, sys)
-        apply_ddi_step!(psi, sm, ddi, bufs, plans, 0.001, 1; imaginary_time=false)
+        apply_ddi_step!(psi, sm, ddi, bufs, 0.001, 1; imaginary_time=false)
         M1 = magnetization(psi, grid, sys)
 
         @test abs(M1 - M0) < 1e-10
@@ -81,9 +79,8 @@
         noddi_atom = AtomSpecies("test", Rb87.mass, 1, Rb87.a0, Rb87.a2, 0.0)
         ddi = make_ddi_params(grid, noddi_atom)
         bufs = make_ddi_buffers(grid.config.n_points)
-        plans = make_fft_plans(grid.config.n_points)
 
-        apply_ddi_step!(psi, sm, ddi, bufs, plans, 0.01, 1; imaginary_time=false)
+        apply_ddi_step!(psi, sm, ddi, bufs, 0.01, 1; imaginary_time=false)
 
         @test psi ≈ psi_orig atol = 1e-12
     end
@@ -96,10 +93,9 @@
         psi = init_psi(grid, sys; state=:uniform)
         ddi = make_ddi_params(grid, Eu151)
         bufs = make_ddi_buffers(grid.config.n_points)
-        plans = make_fft_plans(grid.config.n_points)
 
         N0 = total_norm(psi, grid)
-        apply_ddi_step!(psi, sm, ddi, bufs, plans, 0.001, 3; imaginary_time=false)
+        apply_ddi_step!(psi, sm, ddi, bufs, 0.001, 3; imaginary_time=false)
         N1 = total_norm(psi, grid)
 
         @test abs(N1 - N0) / N0 < 1e-10
@@ -140,10 +136,9 @@
         psi = init_psi(grid, sys; state=:uniform)
         ddi = make_ddi_params(grid, Eu151; secular=true)
         bufs = make_ddi_buffers(grid.config.n_points)
-        plans = make_fft_plans(grid.config.n_points)
 
         N0 = total_norm(psi, grid)
-        apply_ddi_step!(psi, sm, ddi, bufs, plans, 0.001, 3; imaginary_time=false)
+        apply_ddi_step!(psi, sm, ddi, bufs, 0.001, 3; imaginary_time=false)
         N1 = total_norm(psi, grid)
 
         @test abs(N1 - N0) / N0 < 1e-10
@@ -154,21 +149,18 @@
         grid = make_grid(config)
         sys = SpinSystem(1)
         sm = spin_matrices(1)
-        plans = make_fft_plans(grid.config.n_points)
 
-        # Ferromagnetic state along z: F_x = F_y = 0, only F_z nonzero
-        # Secular and full DDI should give identical Phi_z
         psi = init_psi(grid, sys; state=:ferromagnetic)
 
         ddi_full = make_ddi_params(grid, Eu151; secular=false)
         bufs_full = make_ddi_buffers(grid.config.n_points)
         psi_full = copy(psi)
-        apply_ddi_step!(psi_full, sm, ddi_full, bufs_full, plans, 0.001, 3; imaginary_time=false)
+        apply_ddi_step!(psi_full, sm, ddi_full, bufs_full, 0.001, 3; imaginary_time=false)
 
         ddi_sec = make_ddi_params(grid, Eu151; secular=true)
         bufs_sec = make_ddi_buffers(grid.config.n_points)
         psi_sec = copy(psi)
-        apply_ddi_step!(psi_sec, sm, ddi_sec, bufs_sec, plans, 0.001, 3; imaginary_time=false)
+        apply_ddi_step!(psi_sec, sm, ddi_sec, bufs_sec, 0.001, 3; imaginary_time=false)
 
         @test psi_sec ≈ psi_full atol = 1e-12
     end

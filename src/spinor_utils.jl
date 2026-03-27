@@ -91,12 +91,6 @@ Falls back to full eigendecomposition for imaginary time.
         return spinor
     end
 
-    if imaginary_time
-        H = phi_x * sm.Fx + phi_y * sm.Fy + phi_z * sm.Fz
-        U = _exp_i_hermitian(SMatrix{D,D,ComplexF64}(H), dt, true)
-        return U * spinor
-    end
-
     beta = acos(clamp(phi_z / phi_mag, -1.0, 1.0))
     alpha = atan(phi_y, phi_x)
     theta = phi_mag * dt
@@ -104,14 +98,11 @@ Falls back to full eigendecomposition for imaginary time.
     v = MVector{D,ComplexF64}(undef)
     w = MVector{D,ComplexF64}(undef)
 
-    # Recurrence bases (6 cis total instead of 65)
-    z_neg_alpha = cis(-alpha)       # m → m-1 step for Rz
-    z_beta = cis(beta)              # λ → λ+1 step for Ry (eigenvalues ascending)
-    z_theta = cis(theta)            # -m → -(m-1) step for Dz
+    z_neg_alpha = cis(-alpha)
+    z_beta = cis(beta)
 
-    rz_phase = cis(F * alpha)       # Rz(-α) start: exp(+iF·α)
-    ry_phase = cis(-F * beta)       # Ry(-β) start: exp(-iF·β)
-    dz_phase = cis(-F * theta)      # Dz(θ) start: exp(-iF·θ)
+    rz_phase = cis(F * alpha)
+    ry_phase = cis(-F * beta)
 
     # Rz(-α): exp(+imα) via recurrence
     phase = rz_phase
@@ -134,11 +125,21 @@ Falls back to full eigendecomposition for imaginary time.
         v[i] = s
     end
 
-    # Dz(θ): exp(-imθ) via recurrence
-    phase = dz_phase
-    @inbounds for c in 1:D
-        v[c] *= phase
-        phase *= z_theta
+    # Dz(θ): RTP uses cis(-mθ), ITP uses exp(-mθ)
+    if imaginary_time
+        dz_r = exp(-F * theta)
+        dz_step = exp(theta)
+        @inbounds for c in 1:D
+            v[c] *= dz_r
+            dz_r *= dz_step
+        end
+    else
+        dz_phase = cis(-F * theta)
+        z_theta = cis(theta)
+        @inbounds for c in 1:D
+            v[c] *= dz_phase
+            dz_phase *= z_theta
+        end
     end
 
     # Ry(β) = V · diag(exp(-iβλ)) · Vt — conj of Ry(-β) phases

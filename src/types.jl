@@ -183,6 +183,14 @@ struct FFTPlans{P,IP}
     inverse::IP
 end
 
+# --- rFFT Plans (for DDI on real-valued spin density) ---
+
+struct RFFTPlans{N,RP,IRP}
+    forward::RP
+    inverse::IRP
+    rk_shape::NTuple{N,Int}
+end
+
 # --- DDI ---
 
 struct DDIParams{N}
@@ -195,16 +203,20 @@ struct DDIParams{N}
     Q_zz::Array{Float64,N}
 end
 
-struct DDIBuffers{N}
+struct DDIBuffers{N,RP,IRP}
+    rfft_plans::RFFTPlans{N,RP,IRP}
     Fx_r::Array{Float64,N}
     Fy_r::Array{Float64,N}
     Fz_r::Array{Float64,N}
-    Fx_k::Array{ComplexF64,N}
-    Fy_k::Array{ComplexF64,N}
-    Fz_k::Array{ComplexF64,N}
-    Phi_x::Array{ComplexF64,N}
-    Phi_y::Array{ComplexF64,N}
-    Phi_z::Array{ComplexF64,N}
+    Fx_rk::Array{ComplexF64,N}
+    Fy_rk::Array{ComplexF64,N}
+    Fz_rk::Array{ComplexF64,N}
+    Phi_x_rk::Array{ComplexF64,N}
+    Phi_y_rk::Array{ComplexF64,N}
+    Phi_z_rk::Array{ComplexF64,N}
+    Phi_x::Array{Float64,N}
+    Phi_y::Array{Float64,N}
+    Phi_z::Array{Float64,N}
 end
 
 # --- Loss Parameters ---
@@ -218,21 +230,27 @@ LossParams(gamma_dr::Float64) = LossParams(gamma_dr, 0.0)
 
 # --- DDI Padded Context ---
 
-struct DDIPaddedContext{N,P,IP}
+struct DDIPaddedContext{N,RP,IRP}
     padded_shape::NTuple{N,Int}
-    plans::FFTPlans{P,IP}
+    rfft_plans::RFFTPlans{N,RP,IRP}
     Q_xx::Array{Float64,N}
     Q_xy::Array{Float64,N}
     Q_xz::Array{Float64,N}
     Q_yy::Array{Float64,N}
     Q_yz::Array{Float64,N}
     Q_zz::Array{Float64,N}
-    Fx_pad::Array{ComplexF64,N}
-    Fy_pad::Array{ComplexF64,N}
-    Fz_pad::Array{ComplexF64,N}
-    Phi_x_pad::Array{ComplexF64,N}
-    Phi_y_pad::Array{ComplexF64,N}
-    Phi_z_pad::Array{ComplexF64,N}
+    Fx_pad::Array{Float64,N}
+    Fy_pad::Array{Float64,N}
+    Fz_pad::Array{Float64,N}
+    Fx_pad_rk::Array{ComplexF64,N}
+    Fy_pad_rk::Array{ComplexF64,N}
+    Fz_pad_rk::Array{ComplexF64,N}
+    Phi_x_pad_rk::Array{ComplexF64,N}
+    Phi_y_pad_rk::Array{ComplexF64,N}
+    Phi_z_pad_rk::Array{ComplexF64,N}
+    Phi_x_pad::Array{Float64,N}
+    Phi_y_pad::Array{Float64,N}
+    Phi_z_pad::Array{Float64,N}
 end
 
 # --- Batched Kinetic Cache ---

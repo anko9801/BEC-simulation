@@ -41,6 +41,17 @@ function make_fft_plans(spatial_shape::NTuple{N,Int}; flags=FFTW.MEASURE) where 
     FFTPlans(fwd, inv)
 end
 
+rfft_output_shape(n_pts::NTuple{N,Int}) where {N} = (n_pts[1] ÷ 2 + 1, n_pts[2:end]...)
+
+function make_rfft_plans(spatial_shape::NTuple{N,Int}; flags=FFTW.MEASURE) where {N}
+    rk_shape = rfft_output_shape(spatial_shape)
+    real_buf = zeros(Float64, spatial_shape)
+    complex_buf = zeros(ComplexF64, rk_shape)
+    fwd = plan_rfft(real_buf; flags=flags)
+    inv = plan_irfft(complex_buf, spatial_shape[1]; flags=flags)
+    RFFTPlans{N,typeof(fwd),typeof(inv)}(fwd, inv, rk_shape)
+end
+
 function cell_volume(grid::Grid{N}) where {N}
     prod(grid.dx)
 end

@@ -81,7 +81,7 @@ function make_workspace(;
     end
 
     ddi_bufs = if ddi !== nothing
-        make_ddi_buffers(grid.config.n_points)
+        make_ddi_buffers(grid.config.n_points; flags=fft_flags)
     else
         nothing
     end

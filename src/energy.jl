@@ -18,7 +18,7 @@ function total_energy(ws::Workspace{N}) where {N}
     E_c1 = _spin_interaction_energy(psi, ws.spin_matrices, ws.interactions.c1, n_comp, N, n_pts, dV)
 
     E_ddi = if ws.ddi !== nothing
-        _ddi_energy(psi, ws.spin_matrices, ws.ddi, ws.ddi_bufs, ws.fft_plans, n_comp, N, n_pts, dV)
+        _ddi_energy(psi, ws.spin_matrices, ws.ddi, ws.ddi_bufs, n_comp, N, n_pts, dV)
     else
         0.0
     end
@@ -86,14 +86,14 @@ function _nematic_energy(psi, F, c2, ndim, n_pts, dV)
     0.5 * c2 * sum(abs2, A) * dV
 end
 
-function _ddi_energy(psi, sm::SpinMatrices{D}, ddi, ddi_bufs, plans, n_comp, ndim, n_pts, dV) where {D}
+function _ddi_energy(psi, sm::SpinMatrices{D}, ddi, ddi_bufs, n_comp, ndim, n_pts, dV) where {D}
     _compute_spin_density!(ddi_bufs.Fx_r, ddi_bufs.Fy_r, ddi_bufs.Fz_r, psi, sm, Val(D), ndim, n_pts)
-    compute_ddi_potential!(ddi, ddi_bufs, plans)
+    compute_ddi_potential!(ddi, ddi_bufs)
     E = 0.0
     @inbounds for I in CartesianIndices(n_pts)
-        E += real(ddi_bufs.Phi_x[I]) * ddi_bufs.Fx_r[I] +
-             real(ddi_bufs.Phi_y[I]) * ddi_bufs.Fy_r[I] +
-             real(ddi_bufs.Phi_z[I]) * ddi_bufs.Fz_r[I]
+        E += ddi_bufs.Phi_x[I] * ddi_bufs.Fx_r[I] +
+             ddi_bufs.Phi_y[I] * ddi_bufs.Fy_r[I] +
+             ddi_bufs.Phi_z[I] * ddi_bufs.Fz_r[I]
     end
     0.5 * E * dV
 end

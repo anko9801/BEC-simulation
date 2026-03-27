@@ -4,7 +4,7 @@
         grid = make_grid(config)
         ctx = make_ddi_padded(grid, Rb87; c_dd=1.0)
         @test ctx.padded_shape == (128,)
-        @test size(ctx.Q_xx) == (128,)
+        @test size(ctx.Q_xx) == rfft_output_shape((128,))
         @test size(ctx.Fx_pad) == (128,)
     end
 
@@ -13,7 +13,7 @@
         grid = make_grid(config)
         ctx = make_ddi_padded(grid, Rb87; c_dd=1.0)
         @test ctx.padded_shape == (64, 64)
-        @test size(ctx.Q_xx) == (64, 64)
+        @test size(ctx.Q_xx) == rfft_output_shape((64, 64))
     end
 
     @testset "Padded DDI norm conservation (1D)" begin

@@ -99,16 +99,16 @@ println("  Spin density Fy range: $(extrema(bufs.Fy_r))")
 println("  Spin density Fz range: $(extrema(bufs.Fz_r))")
 
 # Compute DDI potential
-SpinorBEC.compute_ddi_potential!(ddi_params, bufs, plans)
-println("  DDI Phi_x range: $(extrema(real.(bufs.Phi_x)))")
-println("  DDI Phi_y range: $(extrema(real.(bufs.Phi_y)))")
-println("  DDI Phi_z range: $(extrema(real.(bufs.Phi_z)))")
+SpinorBEC.compute_ddi_potential!(ddi_params, bufs)
+println("  DDI Phi_x range: $(extrema(bufs.Phi_x))")
+println("  DDI Phi_y range: $(extrema(bufs.Phi_y))")
+println("  DDI Phi_z range: $(extrema(bufs.Phi_z))")
 
 # Check eigenvalue range of H_ddi at center
 ic = CartesianIndex(16, 16)
-phi_x = real(bufs.Phi_x[ic])
-phi_y = real(bufs.Phi_y[ic])
-phi_z = real(bufs.Phi_z[ic])
+phi_x = bufs.Phi_x[ic]
+phi_y = bufs.Phi_y[ic]
+phi_z = bufs.Phi_z[ic]
 H_ddi = phi_x * sm2.Fx + phi_y * sm2.Fy + phi_z * sm2.Fz
 evals = eigvals(Hermitian(Matrix(H_ddi)))
 println("  H_ddi eigenvalues at center: $(round.(evals, digits=4))")

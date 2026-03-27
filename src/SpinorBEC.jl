@@ -52,11 +52,11 @@ include("unitful_support.jl")
 # Types
 export GridConfig, Grid, SpinSystem, SpinMatrices
 export AtomSpecies, InteractionParams, ZeemanParams, LossParams
-export SimParams, SimState, FFTPlans, Workspace, AdaptiveDtParams
+export SimParams, SimState, FFTPlans, RFFTPlans, Workspace, AdaptiveDtParams
 export HarmonicTrap, NoPotential, GravityPotential, CompositePotential
 
 # Grid
-export make_grid, make_fft_plans, cell_volume, n_spatial_points
+export make_grid, make_fft_plans, make_rfft_plans, rfft_output_shape, cell_volume, n_spatial_points
 export load_fftw_wisdom, save_fftw_wisdom
 
 # Spin
