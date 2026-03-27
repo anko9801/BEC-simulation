@@ -10,10 +10,14 @@ A Julia package for simulating spin-$F$ Bose-Einstein condensates by solving the
 - **Ground state search**: imaginary-time propagation with convergence criterion
 - **Real-time dynamics**: multi-phase sequences, time-dependent Zeeman ramps, leapfrog fusion, adaptive $\Delta t$
 - **Potentials**: harmonic trap, gravity, crossed dipole trap (Gaussian beams), laser beam potential, composites
-- **DDI**: dipolar interaction via $k$-space tensor convolution ($Q_{\alpha\beta}$), optimized to 6 FFTs per step
+- **DDI**: dipolar interaction via $k$-space tensor convolution ($Q_{\alpha\beta}$), optimized to 6 FFTs per step, optional zero-padded convolution for reduced aliasing
 - **Raman coupling**: two-photon transitions with spatially dependent matrix exponential
 - **Gaussian beam optics**: complex beam parameter $q$, ABCD matrix propagation, mode coupling
 - **Thomas-Fermi initialization**: chemical potential bisection for density profiles
+- **LHY correction**: beyond-mean-field Lee-Huang-Yang term $\propto n^{5/2}$
+- **Nematic interaction**: singlet pair amplitude $A_{00}$ and $c_2$ nematic energy
+- **Dipolar relaxation losses**: $m$-dependent loss rates, 3-body loss
+- **Yoshida 4th-order integrator**: adaptive time stepping with embedded Strang error estimator
 - **Topological observables**: Berry curvature, superfluid vorticity, skyrmion charge, Majorana star representation
 - **YAML experiment config**: declarative, reproducible multi-phase simulations
 - **Unitful support**: direct input of physical quantities with units
@@ -112,6 +116,8 @@ $$H = \sum_m \int \psi_m^{*} \left[ -\frac{\hbar^2 \nabla^2}{2M} + V(\mathbf{r})
 | $c_0 n$ | Spin-independent contact interaction | Multiply by $c_0 |\psi|^2$ in real space |
 | $c_1 \langle\mathbf{F}\rangle \cdot \mathbf{F}$ | Spin-dependent contact interaction | Matrix exponential at each grid point |
 | $H_{\mathrm{ddi}}$ | Long-range anisotropic dipolar interaction | $k$-space convolution: $Q_{\alpha\beta}(\mathbf{k}) = \hat{k}_\alpha \hat{k}_\beta - \delta_{\alpha\beta}/3$ |
+| $c_2 \|A_{00}\|^2$ | Nematic (singlet pair) interaction | $A_{00} = \sum_m (-1)^{F-m} \psi_m \psi_{-m} / \sqrt{2F+1}$ |
+| $c_{\mathrm{LHY}} n^{5/2}$ | Lee-Huang-Yang beyond-mean-field correction | $V_{\mathrm{LHY}} = c_{\mathrm{LHY}} n \sqrt{n}$ in diagonal step |
 | $H_{\mathrm{Raman}}$ | Two-photon Raman transition | Spatially dependent matrix exponential: $(\Omega_R/2)(e^{i\mathbf{k}\cdot\mathbf{r}} F_+ + \text{h.c.}) + \delta F_z$ |
 
 ### Interaction Parameters
@@ -164,12 +170,30 @@ For real-time dynamics, a leapfrog-fused loop merges adjacent half potential ste
 - Initial states: `:polar` ($m=0$), `:ferromagnetic` ($m = +F$), `:uniform` (equal weight)
 - Thomas-Fermi initialization: `init_psi_thomas_fermi` constructs the density profile from the chemical potential
 
+### Yoshida 4th-Order Integrator
+
+$S_4(\Delta t) = S_2(w_1 \Delta t) \circ S_2(w_0 \Delta t) \circ S_2(w_1 \Delta t)$ where $w_1 = 1/(2 - 2^{1/3})$, $w_0 = 1 - 2w_1$.
+
+- Embedded error estimator: $\|S_4(\Delta t)\psi - S_2(\Delta t)\psi\|/\|\psi\|$
+- PI controller: $(tol/err)^{1/(p+1)}$ with $p=4$
+- Fixed-$\Delta t$ cost: 1.94$\times$ Strang (3K + 4V vs 1K + 2V)
+- Adaptive benefit: 2--5$\times$ faster than adaptive Strang at same accuracy
+
+### Adaptive Time Stepping
+
+Both `run_simulation_adaptive!` (Strang) and `run_simulation_yoshida!` support adaptive $\Delta t$:
+
+- Wavefunction L2 relative change as error estimator
+- Step rejection when error exceeds tolerance
+- FSAL (first same as last) optimization for Strang
+- Configurable via `AdaptiveDtParams(dt_init, dt_min, dt_max, tol)`
+
 ### Real-Time Dynamics
 
 - Multi-phase sequences (output of phase $n$ feeds into phase $n+1$)
 - `TimeDependentZeeman` for linear ramps of $p(t)$, $q(t)$
 - Callback functions for intermediate state access
-- Adaptive time step support
+- Adaptive time step with Strang or Yoshida integrators
 
 ## Potentials
 
@@ -223,7 +247,8 @@ Unitful support: `OpticalBeam(wavelength=1064u"nm", power=1u"W", waist=50u"μm")
 | Total norm | `total_norm(psi, grid)` | $\int n\, dV$ |
 | Magnetization | `magnetization(psi, grid, sys)` | $\int \sum_m m\,|\psi_m|^2\, dV$ |
 | Spin density vector | `spin_density_vector(psi, sm, ndim)` | $(\langle F_x \rangle, \langle F_y \rangle, \langle F_z \rangle)$ at each point |
-| Total energy | `total_energy(ws)` | $E_{\mathrm{kin}} + E_{\mathrm{trap}} + E_{\mathrm{Zee}} + E_{c_0} + E_{c_1} + E_{\mathrm{ddi}}$ |
+| Total energy | `total_energy(ws)` | $E_{\mathrm{kin}} + E_{\mathrm{trap}} + E_{\mathrm{Zee}} + E_{c_0} + E_{c_1} + E_{\mathrm{ddi}} + E_{\mathrm{LHY}} + E_{c_2}$ |
+| Singlet pair amplitude | `singlet_pair_amplitude(psi, F, ndim)` | $A_{00} = \sum_m (-1)^{F-m} \psi_m \psi_{-m} / \sqrt{2F+1}$ |
 | Component populations | `component_populations(psi, grid, sys)` | Normalized occupation of each spin component |
 
 ### Hydrodynamic Quantities
@@ -297,6 +322,23 @@ Unitful.jl quantities are accepted directly as input.
 |-----------|-------------|
 | PlotlyJS | `plot_density`, `plot_spinor`, `plot_spin_texture`, `animate_dynamics` |
 | Makie | 3D surfaces, volume rendering, real-time animation |
+
+## Source Organization
+
+| File | Responsibility |
+|------|---------------|
+| `types.jl` | All struct definitions (must be included first) |
+| `observables.jl` | Density, norm, magnetization, spin density, singlet pair amplitude |
+| `energy.jl` | `total_energy` and all energy component helpers |
+| `currents.jl` | Probability current, superfluid velocity, angular momentum |
+| `vorticity.jl` | Superfluid vorticity, Berry curvature, skyrmion charge |
+| `ddi.jl` | Core DDI: Q tensor, k-space convolution, unpadded DDI step |
+| `ddi_padded.jl` | Zero-padded DDI convolution for reduced aliasing |
+| `adaptive.jl` | Adaptive Strang integration with FSAL |
+| `yoshida.jl` | Adaptive Yoshida 4th-order integration |
+| `split_step.jl` | Strang/Yoshida core splitting routines |
+| `spin_mixing.jl` | Spin-dependent contact interaction step |
+| `losses.jl` | Dipolar relaxation and 3-body loss |
 
 ## Testing
 
