@@ -1,12 +1,14 @@
 """
-Compute interaction parameters in SI units.
+    compute_interaction_params(atom; N_atoms, dims, length_scale)
 
-For F=1 (spin-1):
-  c0 = 4πℏ²(a0 + 2a2) / (3m)
-  c1 = 4πℏ²(a2 - a0) / (3m)
+Compute interaction parameters in SI units from channel-resolved scattering lengths.
 
-For general F with scattering_lengths dict:
-  Delegates to `compute_interaction_params_general_f`.
+For F=1: uses analytic formulas c₀ = 4πℏ²(a₀+2a₂)/(3m), c₁ = 4πℏ²(a₂−a₀)/(3m).
+For F≥2: requires `atom.scattering_lengths` dict (S => a_S for all even S channels).
+
+For atoms where individual a_S are unknown (e.g. ¹⁵¹Eu), use
+`interaction_params_from_constraint(; c_total, c1_ratio, F)` instead, which
+constructs InteractionParams directly from the physical constraint c₀+F²c₁ = c_total.
 """
 function compute_interaction_params(atom::AtomSpecies; N_atoms::Int=1, dims::Int=1, length_scale::Float64=1.0)
     if atom.F == 1
@@ -103,11 +105,17 @@ end
 """
     interaction_params_from_constraint(; c_total, c1_ratio, F)
 
-Compute c₀, c₁ satisfying the constraint c₀ + F²c₁ = c_total.
+Compute c₀, c₁ satisfying the physical constraint c₀ + F²c₁ = c_total.
 
-Given ratio r = c₁/c₀:
+For atoms where individual scattering lengths a_S are unknown (e.g. ¹⁵¹Eu),
+the total contact interaction c_total = 4π(a_s/a_ho)N is known but the
+spin-dependent split c₁/c₀ is a free parameter. This function parameterizes
+by ratio r = c₁/c₀:
+
   c₀ = c_total / (1 + F²r)
   c₁ = r × c₀
+
+Note: r = -1/F² is singular (c₀ → ∞). For F=6, avoid r ≤ -1/36.
 """
 function interaction_params_from_constraint(; c_total::Float64, c1_ratio::Float64, F::Int)
     c0 = c_total / (1.0 + F^2 * c1_ratio)

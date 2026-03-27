@@ -42,7 +42,7 @@
     end
 
     @testset "AtomSpecies g_F field" begin
-        @test Eu151.g_F ≈ 7.0 / 6.0
+        @test Eu151.g_F ≈ 1.9934 * 7.0 / 12.0
         @test Rb87.g_F == -0.5
         @test Na23.g_F == -0.5
 
