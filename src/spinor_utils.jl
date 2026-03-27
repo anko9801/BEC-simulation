@@ -77,7 +77,7 @@ of phi and precomputed Fy eigendecomposition.
 Uses MVector scratch buffers to avoid intermediate SVector heap allocations
 at large D (e.g. D=13 for Eu151). Only one SVector construction at the end.
 
-Falls back to full eigendecomposition for imaginary time.
+Handles both real-time (Dz: cis) and imaginary-time (Dz: exp) propagation.
 """
 @inline function _apply_euler_spin_rotation(
     spinor::SVector{D,ComplexF64}, phi_x, phi_y, phi_z,

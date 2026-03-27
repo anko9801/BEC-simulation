@@ -25,10 +25,14 @@ function total_energy(ws::Workspace{N}) where {N}
 
     E_lhy = ws.interactions.c_lhy != 0.0 ? _lhy_energy(psi, ws.interactions.c_lhy, n_comp, N, n_pts, dV) : 0.0
 
-    c2 = get_cn(ws.interactions, 2)
-    E_c2 = c2 != 0.0 ? _nematic_energy(psi, ws.spin_matrices.system.F, c2, N, n_pts, dV) : 0.0
+    E_tensor = if ws.tensor_cache !== nothing
+        _tensor_interaction_energy(psi, ws.tensor_cache, N, n_pts, dV)
+    else
+        c2 = get_cn(ws.interactions, 2)
+        c2 != 0.0 ? _nematic_energy(psi, ws.spin_matrices.system.F, c2, N, n_pts, dV) : 0.0
+    end
 
-    E_kin + E_trap + E_zee + E_c0 + E_c1 + E_ddi + E_lhy + E_c2
+    E_kin + E_trap + E_zee + E_c0 + E_c1 + E_ddi + E_lhy + E_tensor
 end
 
 function _kinetic_energy(psi, grid, plans, fft_buf, n_comp, ndim, n_pts, dV)

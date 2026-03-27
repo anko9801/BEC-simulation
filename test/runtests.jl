@@ -33,4 +33,7 @@ using SpinorBEC
     include("test_nematic.jl")
     include("test_batched_kinetic.jl")
     include("test_ddi_padded.jl")
+    include("test_clebsch_gordan.jl")
+    include("test_general_f.jl")
+    include("test_tensor_interaction.jl")
 end

@@ -69,6 +69,20 @@ struct AtomSpecies
     a0::Float64         # m (F_tot=0 scattering length)
     a2::Float64         # m (F_tot=2 scattering length)
     mu_mag::Float64     # J/T (magnetic dipole moment, 0.0 for non-dipolar)
+    scattering_lengths::Dict{Int,Float64}  # S => a_S for total spin channels
+
+    function AtomSpecies(name, mass, F, a0, a2, mu_mag, scattering_lengths)
+        new(name, mass, F, a0, a2, mu_mag, scattering_lengths)
+    end
+
+    function AtomSpecies(name, mass, F, a0, a2, mu_mag)
+        sl = if F == 1 && (a0 != 0.0 || a2 != 0.0)
+            Dict{Int,Float64}(0 => a0, 2 => a2)
+        else
+            Dict{Int,Float64}()
+        end
+        new(name, mass, F, a0, a2, mu_mag, sl)
+    end
 end
 
 AtomSpecies(name, mass, F, a0, a2) = AtomSpecies(name, mass, F, a0, a2, 0.0)
@@ -261,6 +275,16 @@ struct BatchedKineticCache{P,IP}
     kinetic_phase_bc::Array{ComplexF64}
 end
 
+# --- Tensor Interaction Cache (general-F) ---
+
+struct TensorInteractionCache
+    F::Int
+    D::Int
+    cg_table::Dict{NTuple{4,Int},Float64}
+    active_channels::Vector{Int}      # S values (even total spin channels)
+    g_values::Vector{Float64}         # corresponding g_S coupling constants
+end
+
 # --- Adaptive Time Stepping ---
 
 struct AdaptiveDtParams
@@ -281,7 +305,7 @@ end
 
 # --- Workspace ---
 
-struct Workspace{N,A,P,IP,SM<:SpinMatrices,ZEE,DDI,DDIB,RAM,LOSS,DDIP,BK}
+struct Workspace{N,A,P,IP,SM<:SpinMatrices,ZEE,DDI,DDIB,RAM,LOSS,DDIP,BK,TC}
     state::SimState{N,A}
     fft_plans::FFTPlans{P,IP}
     kinetic_phase::Array{ComplexF64,N}
@@ -300,4 +324,5 @@ struct Workspace{N,A,P,IP,SM<:SpinMatrices,ZEE,DDI,DDIB,RAM,LOSS,DDIP,BK}
     loss::LOSS
     ddi_padded::DDIP
     batched_kinetic::BK
+    tensor_cache::TC
 end

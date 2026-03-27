@@ -39,7 +39,6 @@ function _fft_gradient(f::AbstractArray{Float64,N}, grid::Grid{N},
         @inbounds for I in CartesianIndices(n_pts)
             result[I] = real(buf[I])
         end
-        plans.forward * buf
         result
     end
 end

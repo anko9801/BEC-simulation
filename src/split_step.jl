@@ -57,11 +57,19 @@ function _half_potential_step!(ws::Workspace{N}, dt_half, n_comp, ndim, imaginar
         imaginary_time,
     )
 
-    @timeit_debug TIMER "nematic" apply_nematic_step!(
-        ws.state.psi, ws.interactions, ws.spin_matrices.system.F,
-        dt_half / 2, ndim;
-        imaginary_time,
-    )
+    if ws.tensor_cache !== nothing
+        @timeit_debug TIMER "tensor" apply_tensor_interaction_step!(
+            ws.state.psi, ws.tensor_cache, ws.spin_matrices,
+            dt_half / 2, ndim;
+            imaginary_time,
+        )
+    else
+        @timeit_debug TIMER "nematic" apply_nematic_step!(
+            ws.state.psi, ws.interactions, ws.spin_matrices.system.F,
+            dt_half / 2, ndim;
+            imaginary_time,
+        )
+    end
 
     if ws.raman !== nothing
         @timeit_debug TIMER "raman" apply_raman_step!(
@@ -95,11 +103,19 @@ function _half_potential_step!(ws::Workspace{N}, dt_half, n_comp, ndim, imaginar
         )
     end
 
-    @timeit_debug TIMER "nematic" apply_nematic_step!(
-        ws.state.psi, ws.interactions, ws.spin_matrices.system.F,
-        dt_half / 2, ndim;
-        imaginary_time,
-    )
+    if ws.tensor_cache !== nothing
+        @timeit_debug TIMER "tensor" apply_tensor_interaction_step!(
+            ws.state.psi, ws.tensor_cache, ws.spin_matrices,
+            dt_half / 2, ndim;
+            imaginary_time,
+        )
+    else
+        @timeit_debug TIMER "nematic" apply_nematic_step!(
+            ws.state.psi, ws.interactions, ws.spin_matrices.system.F,
+            dt_half / 2, ndim;
+            imaginary_time,
+        )
+    end
 
     @timeit_debug TIMER "spin_mixing" apply_spin_mixing_step!(
         ws.state.psi, ws.spin_matrices, ws.interactions.c1,

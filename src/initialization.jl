@@ -97,8 +97,10 @@ function make_workspace(;
 
     batched_kinetic = _make_batched_kinetic_cache(psi, kinetic_phase, N; flags=fft_flags)
 
+    tensor_cache = make_tensor_interaction_cache(atom.F, interactions)
+
     Workspace(
         state, plans, kinetic_phase, V, density_buf, sm, grid, atom, interactions, zeeman, potential, sim_params,
-        ddi, ddi_bufs, raman, loss, ddi_pad, batched_kinetic,
+        ddi, ddi_bufs, raman, loss, ddi_pad, batched_kinetic, tensor_cache,
     )
 end

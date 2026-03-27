@@ -1,38 +1,55 @@
 """
-Compute spin-1 interaction parameters c0 and c1 in SI units.
+Compute interaction parameters in SI units.
 
-For spin-1:
+For F=1 (spin-1):
   c0 = 4πℏ²(a0 + 2a2) / (3m)
   c1 = 4πℏ²(a2 - a0) / (3m)
 
-c1 < 0 → ferromagnetic (87Rb)
-c1 > 0 → antiferromagnetic (23Na)
-
-For general F, this needs extension.
+For general F with scattering_lengths dict:
+  Delegates to `compute_interaction_params_general_f`.
 """
 function compute_interaction_params(atom::AtomSpecies; N_atoms::Int=1, dims::Int=1, length_scale::Float64=1.0)
-    atom.F == 1 || throw(ArgumentError("Only F=1 supported for interaction params"))
+    if atom.F == 1
+        a0, a2, m = atom.a0, atom.a2, atom.mass
+        hbar = Units.HBAR
 
-    a0, a2, m = atom.a0, atom.a2, atom.mass
-    hbar = Units.HBAR
+        c0_3d = 4π * hbar^2 * (a0 + 2a2) / (3m)
+        c1_3d = 4π * hbar^2 * (a2 - a0) / (3m)
 
-    c0_3d = 4π * hbar^2 * (a0 + 2a2) / (3m)
-    c1_3d = 4π * hbar^2 * (a2 - a0) / (3m)
+        if dims == 1
+            l_perp = length_scale
+            c0 = c0_3d / (2π * l_perp^2) * N_atoms
+            c1 = c1_3d / (2π * l_perp^2) * N_atoms
+        elseif dims == 2
+            l_z = length_scale
+            c0 = c0_3d / (sqrt(2π) * l_z) * N_atoms
+            c1 = c1_3d / (sqrt(2π) * l_z) * N_atoms
+        else
+            c0 = c0_3d * N_atoms
+            c1 = c1_3d * N_atoms
+        end
 
-    if dims == 1
-        l_perp = length_scale
-        c0 = c0_3d / (2π * l_perp^2) * N_atoms
-        c1 = c1_3d / (2π * l_perp^2) * N_atoms
-    elseif dims == 2
-        l_z = length_scale
-        c0 = c0_3d / (sqrt(2π) * l_z) * N_atoms
-        c1 = c1_3d / (sqrt(2π) * l_z) * N_atoms
-    else
-        c0 = c0_3d * N_atoms
-        c1 = c1_3d * N_atoms
+        return InteractionParams(c0, c1)
     end
 
-    InteractionParams(c0, c1)
+    isempty(atom.scattering_lengths) && throw(ArgumentError(
+        "F=$(atom.F) requires scattering_lengths dict in AtomSpecies"))
+    compute_interaction_params_general_f(atom; N_atoms, dims, length_scale)
+end
+
+"""
+    compute_interaction_params_general_f(atom; N_atoms, dims, length_scale)
+
+Compute interaction params for general spin-F with channel-resolved scattering lengths.
+
+Returns `InteractionParams(0.0, 0.0)` — all contact interactions are handled by the
+tensor interaction step when scattering lengths are provided. The `g_S` values
+are stored in `TensorInteractionCache`, not in `InteractionParams`.
+"""
+function compute_interaction_params_general_f(atom::AtomSpecies;
+    N_atoms::Int=1, dims::Int=1, length_scale::Float64=1.0,
+)
+    InteractionParams(0.0, 0.0)
 end
 
 """

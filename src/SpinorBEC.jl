@@ -15,6 +15,7 @@ include("units.jl")
 include("grid.jl")
 include("spin_matrices.jl")
 include("spinor_utils.jl")
+include("clebsch_gordan.jl")
 include("atoms.jl")
 include("interactions.jl")
 include("potentials.jl")
@@ -22,6 +23,7 @@ include("zeeman.jl")
 include("propagators.jl")
 include("spin_mixing.jl")
 include("nematic.jl")
+include("tensor_interaction.jl")
 include("losses.jl")
 include("split_step.jl")
 include("raman.jl")
@@ -51,7 +53,7 @@ include("unitful_support.jl")
 
 # Types
 export GridConfig, Grid, SpinSystem, SpinMatrices
-export AtomSpecies, InteractionParams, ZeemanParams, LossParams
+export AtomSpecies, InteractionParams, ZeemanParams, LossParams, TensorInteractionCache
 export SimParams, SimState, FFTPlans, RFFTPlans, Workspace, AdaptiveDtParams
 export HarmonicTrap, NoPotential, GravityPotential, CompositePotential
 
@@ -66,7 +68,7 @@ export spin_matrices
 export Rb87, Na23, Eu151
 
 # Interactions
-export compute_interaction_params, compute_c0, compute_c_dd, compute_a_dd
+export compute_interaction_params, compute_interaction_params_general_f, compute_c0, compute_c_dd, compute_a_dd
 
 # DDI
 export DDIParams, DDIBuffers, DDIPaddedContext, make_ddi_params, make_ddi_buffers, make_ddi_padded
@@ -102,6 +104,12 @@ export apply_spin_mixing_step!
 
 # Nematic
 export apply_nematic_step!
+
+# Tensor interaction (general-F)
+export apply_tensor_interaction_step!, make_tensor_interaction_cache
+
+# Clebsch-Gordan / Wigner coefficients
+export wigner_3j, clebsch_gordan, wigner_6j, precompute_cg_table
 
 # Losses
 export apply_loss_step!
