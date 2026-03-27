@@ -37,8 +37,11 @@ end
 """
 Symmetric inner splitting (all non-commuting operators symmetrized for 2nd-order accuracy):
 
-    diag(dt/4) → SM(dt/4) → nematic(dt/4) → raman(dt/4) → DDI(dt/2)
-              → raman(dt/4) → nematic(dt/4) → SM(dt/4) → diag(dt/4)
+    diag(dt/4) → SM(dt/4) → nematic/tensor(dt/4) → raman(dt/4) → DDI(dt/2)
+              → raman(dt/4) → nematic/tensor(dt/4) → SM(dt/4) → diag(dt/4)
+
+When tensor_cache is active, it handles ALL contact interactions (c₀ through c_{2F}),
+so spin_mixing (c₁) and nematic (c₂) are skipped to avoid double-counting.
 
 DDI is innermost (most expensive: 6 FFTs). Cheaper operators wrap symmetrically.
 """
@@ -51,12 +54,6 @@ function _half_potential_step!(ws::Workspace{N}, dt_half, n_comp, ndim, imaginar
         ws.interactions.c0, ws.interactions.c_lhy, dt_half / 2, ws.density_buf, imaginary_time,
     )
 
-    @timeit_debug TIMER "spin_mixing" apply_spin_mixing_step!(
-        ws.state.psi, ws.spin_matrices, ws.interactions.c1,
-        dt_half / 2, ndim;
-        imaginary_time,
-    )
-
     if ws.tensor_cache !== nothing
         @timeit_debug TIMER "tensor" apply_tensor_interaction_step!(
             ws.state.psi, ws.tensor_cache, ws.spin_matrices,
@@ -64,6 +61,12 @@ function _half_potential_step!(ws::Workspace{N}, dt_half, n_comp, ndim, imaginar
             imaginary_time,
         )
     else
+        @timeit_debug TIMER "spin_mixing" apply_spin_mixing_step!(
+            ws.state.psi, ws.spin_matrices, ws.interactions.c1,
+            dt_half / 2, ndim;
+            imaginary_time,
+        )
+
         @timeit_debug TIMER "nematic" apply_nematic_step!(
             ws.state.psi, ws.interactions, ws.spin_matrices.system.F,
             dt_half / 2, ndim;
@@ -115,13 +118,13 @@ function _half_potential_step!(ws::Workspace{N}, dt_half, n_comp, ndim, imaginar
             dt_half / 2, ndim;
             imaginary_time,
         )
-    end
 
-    @timeit_debug TIMER "spin_mixing" apply_spin_mixing_step!(
-        ws.state.psi, ws.spin_matrices, ws.interactions.c1,
-        dt_half / 2, ndim;
-        imaginary_time,
-    )
+        @timeit_debug TIMER "spin_mixing" apply_spin_mixing_step!(
+            ws.state.psi, ws.spin_matrices, ws.interactions.c1,
+            dt_half / 2, ndim;
+            imaginary_time,
+        )
+    end
 
     @timeit_debug TIMER "diagonal" _diagonal_step_svec!(
         Val(N), ws.state.psi, ws.potential_values, zeeman_diag,

@@ -15,6 +15,19 @@ end
 
 _validate_itp_zeeman(::TimeDependentZeeman, F, dt) = nothing
 
+function _validate_itp_interactions(interactions::InteractionParams, F, dt)
+    max_c = max(abs(interactions.c0), abs(interactions.c1))
+    max_c < 1e-30 && return nothing
+    max_exponent = max_c * F * dt / 4
+    if max_exponent > _ITP_EXPONENT_LIMIT
+        throw(ArgumentError(
+            "Spin interaction c0=$(interactions.c0), c1=$(interactions.c1) with F=$F and dt=$dt " *
+            "may cause overflow in imaginary time (estimated exponent=$(round(max_exponent, digits=1)) " *
+            "> $_ITP_EXPONENT_LIMIT). Reduce c0/c1 magnitude or dt."
+        ))
+    end
+end
+
 function find_ground_state(;
     grid,
     atom,
@@ -41,6 +54,7 @@ function find_ground_state(;
     end
 
     _validate_itp_zeeman(zeeman, atom.F, dt)
+    _validate_itp_interactions(interactions, atom.F, dt)
 
     if adaptive_dt
         return _find_ground_state_adaptive(;
