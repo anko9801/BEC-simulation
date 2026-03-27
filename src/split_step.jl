@@ -1,13 +1,9 @@
 """
-Perform one Strang-split time step.
+Perform one Strang-split time step: V(dt/2) K(dt) V(dt/2).
 
-Nested splitting:
-1. Half potential step:
-   a. Quarter diagonal potential
-   b. Half spin-mixing
-   c. Quarter diagonal potential (recompute density)
-2. Full kinetic step
-3. Half potential step (symmetric)
+Half potential step uses nested symmetric splitting:
+    diag(dt/4) → SM(dt/4) → nematic(dt/4) → raman(dt/4) → DDI(dt/2)
+              → raman(dt/4) → nematic(dt/4) → SM(dt/4) → diag(dt/4)
 
 For imaginary time: replace i with 1 in exponentials, optionally renormalize.
 """
@@ -39,8 +35,12 @@ function split_step!(ws::Workspace{N}) where {N}
 end
 
 """
-Symmetric inner splitting: diag(dt/4) → SM(dt/4) → DDI(dt/2) → SM(dt/4) → diag(dt/4).
-SM and DDI are non-commuting, so symmetric splitting preserves 2nd-order accuracy.
+Symmetric inner splitting (all non-commuting operators symmetrized for 2nd-order accuracy):
+
+    diag(dt/4) → SM(dt/4) → nematic(dt/4) → raman(dt/4) → DDI(dt/2)
+              → raman(dt/4) → nematic(dt/4) → SM(dt/4) → diag(dt/4)
+
+DDI is innermost (most expensive: 6 FFTs). Cheaper operators wrap symmetrically.
 """
 function _half_potential_step!(ws::Workspace{N}, dt_half, n_comp, ndim, imaginary_time) where {N}
     zee = zeeman_at(ws.zeeman, ws.state.t)
@@ -56,6 +56,20 @@ function _half_potential_step!(ws::Workspace{N}, dt_half, n_comp, ndim, imaginar
         dt_half / 2, ndim;
         imaginary_time,
     )
+
+    @timeit_debug TIMER "nematic" apply_nematic_step!(
+        ws.state.psi, ws.interactions, ws.spin_matrices.system.F,
+        dt_half / 2, ndim;
+        imaginary_time,
+    )
+
+    if ws.raman !== nothing
+        @timeit_debug TIMER "raman" apply_raman_step!(
+            ws.state.psi, ws.spin_matrices, ws.raman,
+            ws.grid, dt_half / 2;
+            imaginary_time,
+        )
+    end
 
     if ws.ddi !== nothing
         if ws.ddi_padded !== nothing
@@ -73,19 +87,19 @@ function _half_potential_step!(ws::Workspace{N}, dt_half, n_comp, ndim, imaginar
         end
     end
 
-    @timeit_debug TIMER "nematic" apply_nematic_step!(
-        ws.state.psi, ws.interactions, ws.spin_matrices.system.F,
-        dt_half, ndim;
-        imaginary_time,
-    )
-
     if ws.raman !== nothing
         @timeit_debug TIMER "raman" apply_raman_step!(
             ws.state.psi, ws.spin_matrices, ws.raman,
-            ws.grid, dt_half;
+            ws.grid, dt_half / 2;
             imaginary_time,
         )
     end
+
+    @timeit_debug TIMER "nematic" apply_nematic_step!(
+        ws.state.psi, ws.interactions, ws.spin_matrices.system.F,
+        dt_half / 2, ndim;
+        imaginary_time,
+    )
 
     @timeit_debug TIMER "spin_mixing" apply_spin_mixing_step!(
         ws.state.psi, ws.spin_matrices, ws.interactions.c1,

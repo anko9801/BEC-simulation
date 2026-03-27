@@ -187,6 +187,29 @@
         @test N1 > 0.0
     end
 
+    @testset "apply_nematic_step! ITP symmetry with complex A₀₀ (F=1)" begin
+        # ITP formula: ψ_m' = ch*ψ_m - ph*sh*ψ*_{-m}, ψ_{-m}' = ch*ψ_{-m} - ph*sh*ψ*_m
+        # Both have minus sign → symmetric under m ↔ -m exchange
+        psi = zeros(ComplexF64, 1, 3)
+        psi[1, 1] = 0.5 * cis(0.7)    # m=+1
+        psi[1, 2] = 0.3 + 0.2im       # m=0
+        psi[1, 3] = 0.4 * cis(-0.3)   # m=-1
+        interactions = InteractionParams(10.0, -0.5, [50.0])
+
+        # Swap m=+1 ↔ m=-1
+        psi_swapped = zeros(ComplexF64, 1, 3)
+        psi_swapped[1, 1] = psi[1, 3]
+        psi_swapped[1, 2] = psi[1, 2]
+        psi_swapped[1, 3] = psi[1, 1]
+
+        apply_nematic_step!(psi, interactions, 1, 0.05, 1; imaginary_time=true)
+        apply_nematic_step!(psi_swapped, interactions, 1, 0.05, 1; imaginary_time=true)
+
+        # Symmetric ITP: swap(input) → swap(output)
+        @test psi[1, 1] ≈ psi_swapped[1, 3] atol = 1e-14
+        @test psi[1, 3] ≈ psi_swapped[1, 1] atol = 1e-14
+    end
+
     @testset "apply_nematic_step! integrated in split_step" begin
         config = GridConfig(64, 20.0)
         grid = make_grid(config)

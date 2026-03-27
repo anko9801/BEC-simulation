@@ -53,7 +53,7 @@ function apply_nematic_step!(
         V_base = c2 * A00 * inv_sqrt_D
 
         if imaginary_time
-            # For ITP: apply exp(-|V_m| dt) damping
+            # ITP: exp(-Hτ) with H=[[0,V],[V*,0]] → both components get minus sign
             for c in 1:mid
                 c_pair = D - c + 1
                 V = V_base * signs[c]
@@ -74,7 +74,7 @@ function apply_nematic_step!(
                     sh = sinh(absV * dt)
                     phase = V / absV
                     psi[I, c] = ch * psi_m - phase * sh * conj(psi_neg)
-                    psi[I, c_pair] = ch * psi_neg + phase * sh * conj(psi_m)
+                    psi[I, c_pair] = ch * psi_neg - phase * sh * conj(psi_m)
                 end
             end
         else
