@@ -127,6 +127,16 @@ AtomSpecies(name, mass, F, a0, a2) = AtomSpecies(name, mass, F, a0, a2, 0.0)
 
 # --- Interaction Parameters ---
 
+"""
+    InteractionParams(c0, c1, [c_lhy], [c_extra])
+
+Contact interaction parameters. `c0` is the density coupling, `c1` the spin coupling.
+
+`c_extra` stores higher-rank couplings: `c_extra[n-1]` = cₙ for n ≥ 2.
+Access via `get_cn(ip, n)`. When any even-rank c_extra entry with k ≥ 4 is nonzero,
+`make_workspace` builds a `TensorInteractionCache` and zeros c0/c1 (all contact
+interactions are then handled by the tensor step).
+"""
 struct InteractionParams
     c0::Float64
     c1::Float64
