@@ -41,6 +41,7 @@ include("currents.jl")
 include("vorticity.jl")
 include("diagnostics.jl")
 include("majorana.jl")
+include("spherical_harmonics.jl")
 include("simulation_utils.jl")
 include("initialization.jl")
 include("ground_state.jl")
@@ -131,6 +132,7 @@ export superfluid_velocity, total_angular_momentum, spin_texture_charge
 export superfluid_vorticity, berry_curvature, singlet_pair_amplitude
 export pair_amplitude, pair_amplitude_spectrum
 export majorana_stars, icosahedral_order_parameter
+export spherical_harmonic, spinor_angular_density
 export nematic_tensor_eigenvalues, biaxiality_parameter
 export get_cn
 
