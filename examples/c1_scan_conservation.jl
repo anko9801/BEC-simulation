@@ -3,8 +3,8 @@
 # Outputs JSON summary for plotting.
 #
 # Usage:
-#   julia --project=. scripts/c1_scan_conservation.jl
-#   NGRID=64 T_FINAL=0.5 julia --project=. scripts/c1_scan_conservation.jl
+#   julia --project=. examples/c1_scan_conservation.jl
+#   NGRID=64 T_FINAL=0.5 julia --project=. examples/c1_scan_conservation.jl
 
 include(joinpath(@__DIR__, "eu151_params.jl"))
 include(joinpath(@__DIR__, "json_utils.jl"))

@@ -13,8 +13,8 @@
 # (box boundary conditions), then verifies the density plateau matches n_eq.
 #
 # Usage:
-#   julia --project=. scripts/droplet_lhy.jl
-#   C0=-5.0 C_LHY=0.5 julia --project=. scripts/droplet_lhy.jl
+#   julia --project=. examples/droplet_lhy.jl
+#   C0=-5.0 C_LHY=0.5 julia --project=. examples/droplet_lhy.jl
 
 using SpinorBEC
 using Printf

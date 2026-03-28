@@ -18,7 +18,7 @@ julia --project=. -e 'using SpinorBEC'
 julia --project=. -e 'using Pkg; Pkg.instantiate()'
 
 # Benchmark Eu151 3D (with tracing)
-julia --project=. scripts/bench_eu151.jl
+julia --project=. examples/bench_eu151.jl
 ```
 
 ## Architecture

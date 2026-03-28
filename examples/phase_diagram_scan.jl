@@ -6,8 +6,8 @@
 #   - Broken-axisymmetry (BA): intermediate
 #
 # Usage:
-#   julia --project=. scripts/phase_diagram_scan.jl
-#   N_C1=11 N_Q=11 julia --project=. scripts/phase_diagram_scan.jl
+#   julia --project=. examples/phase_diagram_scan.jl
+#   N_C1=11 N_Q=11 julia --project=. examples/phase_diagram_scan.jl
 
 include(joinpath(@__DIR__, "json_utils.jl"))
 using SpinorBEC
