@@ -74,6 +74,14 @@ function make_workspace(;
     V = evaluate_potential(potential, grid)
 
     ddi = if enable_ddi
+        if isnan(c_dd) && atom.mu_mag > 0.0
+            throw(ArgumentError(
+                "enable_ddi=true for dipolar atom $(atom.name) but c_dd not specified. " *
+                "compute_c_dd(atom) returns SI units which are incompatible with dimensionless grids. " *
+                "Pass c_dd in dimensionless units: c_dd = N × μ₀μ² / (ℏω × a_ho³). " *
+                "See compute_c_dd_dimless()."
+            ))
+        end
         c_dd_val = isnan(c_dd) ? compute_c_dd(atom) : c_dd
         make_ddi_params(grid, atom; c_dd=c_dd_val, secular=secular_ddi)
     else
@@ -97,18 +105,32 @@ function make_workspace(;
 
     batched_kinetic = _make_batched_kinetic_cache(psi, kinetic_phase, N; flags=fft_flags)
 
-    tensor_cache = make_tensor_interaction_cache(atom.F, interactions)
+    F = atom.F
+    has_higher_c_extra = any(
+        i -> iseven(i + 1) && (i + 1) >= 4 && (i + 1) <= 2F && abs(interactions.c_extra[i]) > 1e-30,
+        eachindex(interactions.c_extra),
+    )
 
-    if tensor_cache !== nothing && (abs(interactions.c0) > 1e-30 || abs(interactions.c1) > 1e-30)
-        throw(ArgumentError(
-            "tensor_cache active with non-zero c0=$(interactions.c0), c1=$(interactions.c1). " *
-            "When tensor_cache handles all channels, set c0=c1=0 in InteractionParams " *
-            "to avoid double-counting (diagonal step still uses c0, tensor step includes c0+c1)."
-        ))
+    tensor_cache, ws_interactions = if has_higher_c_extra
+        g_base = _c0c1_to_gS(F, interactions.c0, interactions.c1)
+        g_delta = _c_extra_to_delta_gS(F, interactions.c_extra)
+        g_total = merge(+, g_base, g_delta)
+        tc = _make_tensor_cache_from_channels(F, g_total)
+        tc, InteractionParams(0.0, 0.0, interactions.c_lhy, Float64[])
+    else
+        tc = make_tensor_interaction_cache(F, interactions)
+        if tc !== nothing && (abs(interactions.c0) > 1e-30 || abs(interactions.c1) > 1e-30)
+            throw(ArgumentError(
+                "tensor_cache active with non-zero c0=$(interactions.c0), c1=$(interactions.c1). " *
+                "When tensor_cache handles all channels, set c0=c1=0 in InteractionParams " *
+                "to avoid double-counting (diagonal step still uses c0, tensor step includes c0+c1)."
+            ))
+        end
+        tc, interactions
     end
 
     Workspace(
-        state, plans, kinetic_phase, V, density_buf, sm, grid, atom, interactions, zeeman, potential, sim_params,
+        state, plans, kinetic_phase, V, density_buf, sm, grid, atom, ws_interactions, zeeman, potential, sim_params,
         ddi, ddi_bufs, raman, loss, ddi_pad, batched_kinetic, tensor_cache,
     )
 end

@@ -117,6 +117,28 @@
         @test V_pair ≈ V_standard rtol = 1e-10
     end
 
+    @testset "c_k ↔ g_S roundtrip" begin
+        for F in [1, 2, 3, 6]
+            c_dict = Dict{Int,Float64}(k => randn() for k in 0:2:2F)
+            g_dict = SpinorBEC._cn_to_gS(F, c_dict)
+            c_round = SpinorBEC._gS_to_cn(F, g_dict)
+            for k in 0:2:2F
+                @test get(c_round, k, 0.0) ≈ c_dict[k] atol=1e-10
+            end
+        end
+    end
+
+    @testset "F=1 analytic c_k → g_S" begin
+        ck0, ck2 = 8.0, 5.0
+        c_dict = Dict(0 => ck0, 2 => ck2)
+        g_dict = SpinorBEC._cn_to_gS(1, c_dict)
+        # g_S = Σ_k (2k+1) {1 1 k; 1 1 S} c_k
+        # {1 1 0; 1 1 0} = {1 1 0; 1 1 2} = 1/3
+        # {1 1 2; 1 1 0} = 1/3, {1 1 2; 1 1 2} = 1/30
+        @test g_dict[0] ≈ ck0 / 3 + 5 * ck2 / 3 atol=1e-10
+        @test g_dict[2] ≈ ck0 / 3 + ck2 / 6 atol=1e-10
+    end
+
     @testset "precompute_cg_table" begin
         for F in [1, 2, 3]
             table = precompute_cg_table(F)

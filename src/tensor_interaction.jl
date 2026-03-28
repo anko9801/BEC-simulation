@@ -48,30 +48,71 @@ function make_tensor_interaction_cache(
 end
 
 """
-    make_tensor_interaction_cache(F, interactions)
+    make_tensor_interaction_cache(F, interactions; basis=:coupling)
 
 Build from InteractionParams (for testing with dimensionless coupling constants).
-Returns `nothing` if no channels with l >= 3 have nonzero coupling (nematic handles c2 alone).
+
+The `basis` keyword controls how the values in `InteractionParams` are interpreted:
+- `:coupling` (default): c_k are rank-k tensor couplings, transformed to g_S via 6j symbols
+- `:channel`: values are already channel couplings g_S, stored directly
+
+Returns `nothing` if no channels with S >= 3 have nonzero coupling after transform
+(nematic handles c2 alone).
 """
-function make_tensor_interaction_cache(F::Int, interactions::InteractionParams)
+function make_tensor_interaction_cache(F::Int, interactions::InteractionParams;
+                                       basis::Symbol=:coupling)
+    c_dict = Dict{Int,Float64}()
+    for k in 0:2:2F
+        ck = get_cn(interactions, k)
+        abs(ck) > 1e-30 && (c_dict[k] = ck)
+    end
+    isempty(c_dict) && return nothing
+
+    has_higher = any(k -> k > 2, keys(c_dict))
+    has_higher || return nothing
+
+    if basis === :coupling
+        g_dict = _cn_to_gS(F, c_dict)
+    elseif basis === :channel
+        g_dict = c_dict
+    else
+        throw(ArgumentError("basis must be :coupling or :channel, got :$basis"))
+    end
+
     active_channels = Int[]
     g_values = Float64[]
-
-    for l in 0:2:2F
-        cl = get_cn(interactions, l)
-        if abs(cl) > 1e-30
-            push!(active_channels, l)
-            push!(g_values, cl)
-        end
+    for S in 0:2:2F
+        gS = get(g_dict, S, 0.0)
+        abs(gS) > 1e-30 || continue
+        push!(active_channels, S)
+        push!(g_values, gS)
     end
 
     isempty(active_channels) && return nothing
 
-    has_higher = any(l -> l > 2, active_channels)
-    if !has_higher
-        return nothing
-    end
+    D = 2F + 1
+    cg_table = precompute_cg_table(F)
+    TensorInteractionCache(F, D, cg_table, active_channels, g_values)
+end
 
+"""
+    _make_tensor_cache_from_channels(F, g_dict::Dict{Int,Float64})
+
+Build a `TensorInteractionCache` directly from pre-computed channel couplings g_S.
+No transform is applied — values are used as-is.
+
+Returns `nothing` if no channels have nonzero coupling.
+"""
+function _make_tensor_cache_from_channels(F::Int, g_dict::Dict{Int,Float64})
+    active_channels = Int[]
+    g_values = Float64[]
+    for S in 0:2:2F
+        gS = get(g_dict, S, 0.0)
+        abs(gS) > 1e-30 || continue
+        push!(active_channels, S)
+        push!(g_values, gS)
+    end
+    isempty(active_channels) && return nothing
     D = 2F + 1
     cg_table = precompute_cg_table(F)
     TensorInteractionCache(F, D, cg_table, active_channels, g_values)

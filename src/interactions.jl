@@ -60,7 +60,7 @@ c0 = 4πℏ² a_s / m (no spin channels, just s-wave scattering length a0).
 """
 function compute_c0(atom::AtomSpecies; N_atoms::Int=1, dims::Int=1, length_scale::Float64=1.0)
     hbar = Units.HBAR
-    c0_3d = 4π * hbar^2 * atom.a0 / atom.mass
+    c0_3d = 4π * hbar^2 * atom.a_s / atom.mass
 
     if dims == 1
         c0_3d / (2π * length_scale^2) * N_atoms
@@ -103,7 +103,43 @@ function compute_interaction_params_dimless(atom::AtomSpecies; N_atoms::Int=1, d
 end
 
 """
-    interaction_params_from_constraint(; c_total, c1_ratio, F)
+    _c0c1_to_gS(F, c0, c1) → Dict{Int,Float64}
+
+Convert physical density (c₀) and spin (c₁) couplings to channel couplings g_S:
+  g_S = c₀ + c₁(S(S+1) − 2F(F+1))/2
+
+This is the physical relation, NOT the 6j tensor transform. It gives:
+- F=1: g₀ = c₀ − 2c₁, g₂ = c₀ + c₁
+- General F: g_S for all even S ∈ 0:2:2F
+"""
+function _c0c1_to_gS(F::Int, c0::Float64, c1::Float64)
+    Dict{Int,Float64}(
+        S => c0 + c1 * (S * (S + 1) - 2 * F * (F + 1)) / 2
+        for S in 0:2:2F
+    )
+end
+
+"""
+    _c_extra_to_delta_gS(F, c_extra) → Dict{Int,Float64}
+
+Convert higher-rank tensor couplings c_k (k=2,4,...) to channel coupling
+perturbations δg_S via 6j transform.
+
+Only processes rank k ≥ 2 entries from c_extra (c_extra[idx] corresponds to
+c_{idx+1}, so c_extra[1]=c₂, c_extra[3]=c₄, etc.).
+"""
+function _c_extra_to_delta_gS(F::Int, c_extra::Vector{Float64})
+    c_dict = Dict{Int,Float64}()
+    for (idx, val) in enumerate(c_extra)
+        k = idx + 1
+        abs(val) > 1e-30 && iseven(k) && k <= 2F && (c_dict[k] = val)
+    end
+    isempty(c_dict) && return Dict{Int,Float64}()
+    _cn_to_gS(F, c_dict)
+end
+
+"""
+    interaction_params_from_constraint(; c_total, c1_ratio, F, c_extra)
 
 Compute c₀, c₁ satisfying the physical constraint c₀ + F²c₁ = c_total.
 
@@ -115,12 +151,17 @@ by ratio r = c₁/c₀:
   c₀ = c_total / (1 + F²r)
   c₁ = r × c₀
 
+The optional `c_extra` vector provides higher-rank tensor couplings (c₂, c₃, ...)
+which are stored in InteractionParams and used to build a TensorInteractionCache
+when higher even-rank channels (k ≥ 4) are present.
+
 Note: r = -1/F² is singular (c₀ → ∞). For F=6, avoid r ≤ -1/36.
 """
-function interaction_params_from_constraint(; c_total::Float64, c1_ratio::Float64, F::Int)
+function interaction_params_from_constraint(; c_total::Float64, c1_ratio::Float64=0.0,
+                                              F::Int, c_extra::Vector{Float64}=Float64[])
     c0 = c_total / (1.0 + F^2 * c1_ratio)
     c1 = c1_ratio * c0
-    InteractionParams(c0, c1)
+    InteractionParams(c0, c1, 0.0, c_extra)
 end
 
 """
@@ -130,7 +171,7 @@ Total contact interaction c_total = 4π(a_s/a_ho)N in dimensionless units (3D).
 """
 function compute_c_total(atom::AtomSpecies; N_atoms::Int, omega_ref::Float64)
     a_ho = sqrt(Units.HBAR / (atom.mass * omega_ref))
-    4π * (atom.a0 / a_ho) * N_atoms
+    4π * (atom.a_s / a_ho) * N_atoms
 end
 
 """

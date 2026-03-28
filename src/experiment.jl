@@ -119,17 +119,14 @@ function _parse_system(d::Dict)
         c_total = Float64(inter["c_total"])
         c1_ratio = Float64(get(inter, "c1_ratio", 0.0))
         F_atom = resolve_atom(atom_name).F
-        interaction_params_from_constraint(; c_total, c1_ratio, F=F_atom)
+        c_extra = _parse_c_extra(inter, F_atom)
+        interaction_params_from_constraint(; c_total, c1_ratio, F=F_atom, c_extra)
     else
         c0 = Float64(inter["c0"])
         c1 = Float64(inter["c1"])
         c_lhy = Float64(get(inter, "c_lhy", 0.0))
-        c_extra = Float64[]
-        n = 2
-        while haskey(inter, "c$n")
-            push!(c_extra, Float64(inter["c$n"]))
-            n += 1
-        end
+        F_atom = resolve_atom(atom_name).F
+        c_extra = _parse_c_extra(inter, F_atom)
         InteractionParams(c0, c1, c_lhy, c_extra)
     end
 
@@ -229,3 +226,23 @@ _to_int_vec(v::Vector) = Int[Int(x) for x in v]
 _to_int_vec(v) = Int[Int(v)]
 _to_float_vec(v::Vector) = Float64[Float64(x) for x in v]
 _to_float_vec(v) = Float64[Float64(v)]
+
+"""
+Parse c_extra (c2, c3, c4, ...) from a YAML interactions dict. Handles sparse keys
+(e.g. c4 present without c2/c3) by filling zeros up to the largest cN found.
+"""
+function _parse_c_extra(inter::Dict, ::Int)
+    max_n = 0
+    for k in keys(inter)
+        m = match(r"^c(\d+)$", string(k))
+        m === nothing && continue
+        n = parse(Int, m.captures[1])
+        n >= 2 && (max_n = max(max_n, n))
+    end
+    max_n < 2 && return Float64[]
+    c_extra = zeros(Float64, max_n - 1)
+    for n in 2:max_n
+        haskey(inter, "c$n") && (c_extra[n - 1] = Float64(inter["c$n"]))
+    end
+    c_extra
+end

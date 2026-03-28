@@ -30,6 +30,18 @@
         @test isempty(Eu151.scattering_lengths)
     end
 
+    @testset "a_s field" begin
+        @test Rb87.a_s ≈ (Rb87.a0 + 2 * Rb87.a2) / 3 rtol=1e-12
+        @test Na23.a_s ≈ (Na23.a0 + 2 * Na23.a2) / 3 rtol=1e-12
+        @test Eu151.a_s == Eu151.a0
+
+        a = AtomSpecies("test", 1.0, 1, 0.3, 0.6)
+        @test a.a_s ≈ (0.3 + 2 * 0.6) / 3
+
+        b = AtomSpecies("test", 1.0, 3, 0.5, 0.0)
+        @test b.a_s == 0.5
+    end
+
     @testset "compute_interaction_params F=1 unchanged" begin
         params = compute_interaction_params(Rb87; N_atoms=1, dims=3)
         hbar = SpinorBEC.Units.HBAR

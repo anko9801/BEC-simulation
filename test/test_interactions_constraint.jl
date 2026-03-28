@@ -99,6 +99,100 @@
         @test ip.c1 ≈ 0.0
     end
 
+    @testset "_c0c1_to_gS analytic F=1" begin
+        c0, c1 = 100.0, -5.0
+        g = SpinorBEC._c0c1_to_gS(1, c0, c1)
+        @test g[0] ≈ c0 - 2c1   # g₀ = c₀ + c₁(0 - 2)/2 = c₀ - c₁
+        @test g[2] ≈ c0 + c1    # g₂ = c₀ + c₁(6 - 4)/2 = c₀ + c₁
+    end
+
+    @testset "_c0c1_to_gS pair amplitude identity F=1,2,6" begin
+        for F in [1, 2, 6]
+            D = 2F + 1
+            c0, c1 = 100.0, -3.0
+            g = SpinorBEC._c0c1_to_gS(F, c0, c1)
+            cg_table = precompute_cg_table(F)
+            sm = spin_matrices(F)
+
+            for trial in 1:5
+                sp = randn(ComplexF64, D)
+                n = sum(abs2, sp)
+
+                Fvec = zeros(ComplexF64, 3)
+                Fmats = [sm.Fx, sm.Fy, sm.Fz]
+                for (a, Fa) in enumerate(Fmats)
+                    for i in 1:D, j in 1:D
+                        Fvec[a] += conj(sp[i]) * Fa[i, j] * sp[j]
+                    end
+                end
+                Fsq = sum(abs2, Fvec) |> real
+
+                E_pair = 0.0
+                for S in 0:2:2F
+                    gS = g[S]
+                    for M in -S:S
+                        A = zero(ComplexF64)
+                        for m1 in -F:F
+                            m2 = M - m1
+                            abs(m2) > F && continue
+                            cg_val = get(cg_table, (S, M, m1, m2), 0.0)
+                            c1_idx = F - m1 + 1
+                            c2_idx = F - m2 + 1
+                            A += cg_val * sp[c1_idx] * sp[c2_idx]
+                        end
+                        E_pair += gS * abs2(A)
+                    end
+                end
+
+                E_expected = c0 * n^2 + c1 * Fsq
+                @test E_pair ≈ E_expected rtol = 1e-10
+            end
+        end
+    end
+
+    @testset "_c_extra_to_delta_gS" begin
+        g = SpinorBEC._c_extra_to_delta_gS(2, [0.0, 0.0, 5.0])
+        @test !isempty(g)
+
+        g_empty = SpinorBEC._c_extra_to_delta_gS(2, Float64[])
+        @test isempty(g_empty)
+
+        g_odd = SpinorBEC._c_extra_to_delta_gS(2, [0.0, 3.0])
+        @test isempty(g_odd)
+    end
+
+    @testset "interaction_params_from_constraint with c_extra" begin
+        ip = interaction_params_from_constraint(; c_total=4689.0, c1_ratio=1.0/36, F=6,
+                                                  c_extra=[0.0, 0.0, 50.0])
+        @test ip.c0 + 36 * ip.c1 ≈ 4689.0 rtol=1e-12
+        @test length(ip.c_extra) == 3
+        @test ip.c_extra[3] ≈ 50.0
+    end
+
+    @testset "YAML c_total with c_extra" begin
+        yaml_str = """
+        experiment:
+          name: "c_extra test"
+          system:
+            atom: Eu151
+            grid:
+              n_points: [32]
+              box_size: [10.0]
+            interactions:
+              c_total: 4689.0
+              c1_ratio: 0.02778
+              c4: 50.0
+              c6: -20.0
+          sequence: []
+        """
+        config = load_experiment_from_string(yaml_str)
+        ip = config.system.interactions
+        @test ip.c0 + 36 * ip.c1 ≈ 4689.0 rtol=1e-4
+        @test length(ip.c_extra) >= 5
+        @test ip.c_extra[3] ≈ 50.0   # c4 → c_extra[3]
+        @test ip.c_extra[5] ≈ -20.0  # c6 → c_extra[5]
+    end
+
     @testset "YAML explicit c0/c1 still works" begin
         yaml_str = """
         experiment:

@@ -27,7 +27,7 @@
         a_dd = compute_a_dd(Eu151)
         @test a_dd > 0.0
 
-        eps_dd = a_dd / Eu151.a0
+        eps_dd = a_dd / Eu151.a_s
         @test 0.4 < eps_dd < 0.7
     end
 
@@ -172,7 +172,7 @@
         interactions = InteractionParams(100.0, 0.0)
         sp = SimParams(dt=0.001, n_steps=1, imaginary_time=false, normalize_every=0, save_every=1)
 
-        ws = make_workspace(; grid, atom, interactions, sim_params=sp, enable_ddi=true, secular_ddi=true)
+        ws = make_workspace(; grid, atom, interactions, sim_params=sp, enable_ddi=true, c_dd=1.0, secular_ddi=true)
         @test ws.ddi !== nothing
         @test maximum(abs, ws.ddi.Q_xy) == 0.0
     end
@@ -185,7 +185,7 @@
         trap = HarmonicTrap(1.0, 1.0, 1.0)
         sp = SimParams(dt=0.001, n_steps=10, imaginary_time=false, normalize_every=0, save_every=10)
 
-        ws = make_workspace(; grid, atom, interactions, potential=trap, sim_params=sp, enable_ddi=true)
+        ws = make_workspace(; grid, atom, interactions, potential=trap, sim_params=sp, enable_ddi=true, c_dd=1.0)
 
         @test ws.ddi !== nothing
         @test ws.ddi_bufs !== nothing
@@ -197,5 +197,13 @@
         N1 = total_norm(ws.state.psi, ws.grid)
 
         @test abs(N1 - N0) / N0 < 1e-6
+    end
+
+    @testset "DDI requires explicit c_dd for dipolar atoms" begin
+        config = GridConfig((8,), (10.0,))
+        grid = make_grid(config)
+        interactions = InteractionParams(1.0, 0.0)
+        sp = SimParams(dt=0.001, n_steps=1, imaginary_time=false, normalize_every=0, save_every=1)
+        @test_throws ArgumentError make_workspace(; grid, atom=Eu151, interactions, sim_params=sp, enable_ddi=true)
     end
 end

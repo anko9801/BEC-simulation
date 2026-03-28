@@ -109,6 +109,52 @@ function wigner_6j(j1::Int, j2::Int, j3::Int, j4::Int, j5::Int, j6::Int)
 end
 
 """
+    _build_6j_matrix(F) → (Matrix, Vector{Int})
+
+Build the even-rank 6j transform matrix W[i,j] = (2k_j+1) {F F k_j; F F S_i}
+for even k,S in 0:2:2F. Returns (W, even_vals).
+"""
+function _build_6j_matrix(F::Int)
+    even_vals = collect(0:2:2F)
+    n = length(even_vals)
+    W = zeros(n, n)
+    for (i, S) in enumerate(even_vals)
+        for (j, k) in enumerate(even_vals)
+            W[i, j] = (2k + 1) * wigner_6j(F, F, k, F, F, S)
+        end
+    end
+    W, even_vals
+end
+
+"""
+    _cn_to_gS(F, c_dict) → Dict{Int,Float64}
+
+Transform rank-k tensor couplings c_k to channel couplings g_S via Wigner 6j:
+  g_S = Σ_k (2k+1) {F F k; F F S} c_k
+"""
+function _cn_to_gS(F::Int, c_dict::Dict{Int,Float64})
+    W, even_vals = _build_6j_matrix(F)
+    n = length(even_vals)
+    c_vec = [get(c_dict, even_vals[j], 0.0) for j in 1:n]
+    g_vec = W * c_vec
+    Dict{Int,Float64}(even_vals[i] => g_vec[i] for i in 1:n)
+end
+
+"""
+    _gS_to_cn(F, g_dict) → Dict{Int,Float64}
+
+Inverse transform: channel couplings g_S to rank-k tensor couplings c_k.
+Uses the matrix inverse of the even-rank 6j transform.
+"""
+function _gS_to_cn(F::Int, g_dict::Dict{Int,Float64})
+    W, even_vals = _build_6j_matrix(F)
+    n = length(even_vals)
+    g_vec = [get(g_dict, even_vals[i], 0.0) for i in 1:n]
+    c_vec = W \ g_vec
+    Dict{Int,Float64}(even_vals[j] => c_vec[j] for j in 1:n)
+end
+
+"""
     precompute_cg_table(F)
 
 Precompute CG coefficients ⟨F,m1;F,m2|l,M⟩ for all valid quantum numbers.

@@ -155,8 +155,8 @@ end
 One 4th-order Yoshida step with merged boundary V-steps: 4V + 3K stages.
 
 w₀ < 0 causes reverse evolution in the middle substep.
-All operators (kinetic, diagonal, DDI, spin-mixing) are unitary and time-reversible,
-so negative dt is valid.
+All operators (kinetic, diagonal, DDI, spin-mixing, tensor) are unitary and time-reversible,
+so negative dt is valid. Tensor step uses eigendecomposition: exp(-iHdt) with dt<0 is exact.
 """
 function _yoshida_core!(ws::Workspace{N}, dt::Float64, n_comp::Int) where {N}
     w1 = _YOSHIDA_W1
