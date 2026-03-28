@@ -371,6 +371,13 @@ end
 TOFParams(; t_tof::Float64, gradient::Float64=0.0, imaging_axis::Int=3) =
     TOFParams(t_tof, gradient, imaging_axis)
 
+struct BdGResult
+    k_values::Vector{Float64}
+    omega::Matrix{ComplexF64}
+    max_growth_rate::Float64
+    unstable::Bool
+end
+
 # --- Workspace ---
 
 struct Workspace{N,A,P,IP,SM<:SpinMatrices,ZEE,DDI,DDIB,RAM,LOSS,DDIP,BK,TC}

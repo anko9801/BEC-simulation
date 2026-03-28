@@ -41,6 +41,7 @@ include("energy.jl")
 include("currents.jl")
 include("vorticity.jl")
 include("diagnostics.jl")
+include("bogoliubov.jl")
 include("majorana.jl")
 include("spherical_harmonics.jl")
 include("simulation_utils.jl")
@@ -59,7 +60,7 @@ include("unitful_support.jl")
 export GridConfig, Grid, SpinSystem, SpinMatrices
 export AtomSpecies, InteractionParams, ZeemanParams, LossParams, TensorInteractionCache
 export SimParams, SimState, FFTPlans, RFFTPlans, Workspace, AdaptiveDtParams
-export TOFParams
+export TOFParams, BdGResult
 export HarmonicTrap, NoPotential, GravityPotential, CompositePotential
 
 # Grid
@@ -148,6 +149,7 @@ export thomas_fermi_radius, thomas_fermi_radius_harmonic
 export phase_diagram_point, component_populations, make_conservation_monitor
 export classify_phase, estimate_splitting_error, validate_conservation
 export power_spectrum
+export bogoliubov_spectrum
 
 # Simulation
 export find_ground_state, find_ground_state_multistart, scan_continuation
