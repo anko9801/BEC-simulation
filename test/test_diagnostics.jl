@@ -1,4 +1,5 @@
 using SpinorBEC: _elliptic_k
+using FFTW
 
 @testset "Diagnostics" begin
 
@@ -51,6 +52,37 @@ using SpinorBEC: _elliptic_k
         @test q ≈ expected
         @test q > 0.0
         @test_throws ArgumentError quadratic_zeeman_from_field(0.5, 1e-4, -1.0)
+    end
+
+    @testset "Quadratic Zeeman auto-calculation" begin
+        @testset "Rb87 at B=1mT" begin
+            q = compute_quadratic_zeeman(Rb87, 1e-3)
+            @test q > 0
+            q_manual = quadratic_zeeman_from_field(Rb87.g_F, 1e-3, Rb87.Delta_E_hf)
+            @test q ≈ q_manual
+        end
+
+        @testset "Na23 at B=0.1mT" begin
+            q = compute_quadratic_zeeman(Na23, 1e-4)
+            @test q > 0
+        end
+
+        @testset "Eu151 throws (unknown hf)" begin
+            @test_throws ArgumentError compute_quadratic_zeeman(Eu151, 1e-4)
+        end
+
+        @testset "dimensionless version" begin
+            omega = 2π * 100.0
+            q_dimless = compute_quadratic_zeeman_dimless(Rb87, 1e-3, omega)
+            q_si = compute_quadratic_zeeman(Rb87, 1e-3)
+            @test q_dimless ≈ q_si / (SpinorBEC.Units.HBAR * omega)
+        end
+
+        @testset "Delta_E_hf stored correctly" begin
+            @test Rb87.Delta_E_hf > 0
+            @test Na23.Delta_E_hf > 0
+            @test Eu151.Delta_E_hf ≈ 0.0
+        end
     end
 
     @testset "Healing lengths" begin
@@ -169,6 +201,80 @@ using SpinorBEC: _elliptic_k
             @test length(result.populations) == 5
             @test sum(result.populations) ≈ 1.0 atol = 1e-12
             @test result.m_values == [2, 1, 0, -1, -2]
+        end
+    end
+
+    @testset "Splitting error estimator" begin
+        grid = make_grid(GridConfig(64, 10.0))
+        interactions = InteractionParams(10.0, -0.5)
+        trap = HarmonicTrap(1.0)
+
+        sp1 = SimParams(; dt=0.01, n_steps=10, imaginary_time=false, save_every=10)
+        ws1 = make_workspace(; grid, atom=Rb87, interactions, potential=trap,
+                              sim_params=sp1, fft_flags=FFTW.ESTIMATE)
+        err1 = estimate_splitting_error(ws1)
+
+        sp2 = SimParams(; dt=0.005, n_steps=10, imaginary_time=false, save_every=10)
+        ws2 = make_workspace(; grid, atom=Rb87, interactions, potential=trap,
+                              sim_params=sp2, fft_flags=FFTW.ESTIMATE)
+        err2 = estimate_splitting_error(ws2)
+
+        @test err1 > 0
+        @test err2 > 0
+        @test err2 < err1
+    end
+
+    @testset "Conservation validation" begin
+        grid = make_grid(GridConfig(64, 10.0))
+        interactions = InteractionParams(10.0, -0.5)
+        trap = HarmonicTrap(1.0)
+
+        @testset "passes for reasonable dt" begin
+            sp = SimParams(; dt=0.001, n_steps=100, imaginary_time=false, save_every=100)
+            ws = make_workspace(; grid, atom=Rb87, interactions, potential=trap,
+                                sim_params=sp, fft_flags=FFTW.ESTIMATE)
+            result = validate_conservation(ws; n_steps=50)
+            @test result.passed
+            @test result.norm_drift < 1e-12
+        end
+
+        @testset "restores state" begin
+            sp = SimParams(; dt=0.001, n_steps=100, imaginary_time=false, save_every=100)
+            ws = make_workspace(; grid, atom=Rb87, interactions, potential=trap,
+                                sim_params=sp, fft_flags=FFTW.ESTIMATE)
+            psi_before = copy(ws.state.psi)
+            validate_conservation(ws; n_steps=20)
+            @test ws.state.psi ≈ psi_before
+        end
+    end
+
+    @testset "Phase classification" begin
+        grid = make_grid(GridConfig(64, 10.0))
+        sm = spin_matrices(1)
+        sys = SpinSystem(1)
+
+        @testset "ferromagnetic |F,+F⟩" begin
+            psi = init_psi(grid, sys; state=:ferromagnetic)
+            r = classify_phase(psi, 1, grid, sm)
+            @test r.phase == :ferromagnetic
+            @test r.spin_order > 0.9
+        end
+
+        @testset "polar |m=0⟩ → :polar" begin
+            psi = init_psi(grid, sys; state=:polar)
+            r = classify_phase(psi, 1, grid, sm)
+            @test r.phase == :polar
+            @test r.nematic_order ≈ 1.0 rtol = 1e-10
+            @test r.spin_order ≈ 0.0 atol = 1e-10
+        end
+
+        @testset "F=2 ferromagnetic" begin
+            grid2 = make_grid(GridConfig(32, 10.0))
+            sm2 = spin_matrices(2)
+            sys2 = SpinSystem(2)
+            psi2 = init_psi(grid2, sys2; state=:ferromagnetic)
+            r = classify_phase(psi2, 2, grid2, sm2)
+            @test r.phase == :ferromagnetic
         end
     end
 end

@@ -129,17 +129,21 @@ export spin_density_vector, total_norm, total_energy
 export probability_current, orbital_angular_momentum
 export superfluid_velocity, total_angular_momentum, spin_texture_charge
 export superfluid_vorticity, berry_curvature, singlet_pair_amplitude
+export pair_amplitude, pair_amplitude_spectrum
 export majorana_stars, icosahedral_order_parameter
 export get_cn
 
 # Diagnostics
 export spin_mixing_period, spin_mixing_period_si, quadratic_zeeman_from_field
+export compute_quadratic_zeeman, compute_quadratic_zeeman_dimless
 export healing_length_contact, healing_length_spin, healing_length_ddi
 export thomas_fermi_radius, thomas_fermi_radius_harmonic
 export phase_diagram_point, component_populations, make_conservation_monitor
+export classify_phase, estimate_splitting_error, validate_conservation
 
 # Simulation
-export find_ground_state, run_simulation!, run_simulation_adaptive!, run_simulation_yoshida!, make_workspace, init_psi
+export find_ground_state, find_ground_state_multistart
+export run_simulation!, run_simulation_adaptive!, run_simulation_yoshida!, make_workspace, init_psi
 
 # I/O
 export save_state, load_state, save_experiment_result, load_experiment_result
