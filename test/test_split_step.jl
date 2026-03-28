@@ -156,6 +156,37 @@ using SpinorBEC
         @test yoshida_ratio > strang_ratio * 1.5
     end
 
+    @testset "Yoshida O(dt^4) convergence (1D)" begin
+        config = GridConfig(128, 20.0)
+        grid = make_grid(config)
+        sys = SpinSystem(1)
+        interactions = InteractionParams(1.0, 0.1)
+        n_comp = sys.n_components
+
+        T = 0.1
+        dts = [0.02, 0.01, 0.005]
+        errors = Float64[]
+
+        for dt in dts
+            n_steps = round(Int, T / dt)
+            sp = SimParams(; dt, n_steps, imaginary_time=false, save_every=n_steps)
+            psi0 = init_psi(grid, sys; state=:polar)
+            ws = make_workspace(; grid, atom=Rb87, interactions, sim_params=sp, psi_init=psi0)
+            E0 = total_energy(ws)
+            for _ in 1:n_steps
+                SpinorBEC._yoshida_core!(ws, dt, n_comp)
+                ws.state.t += dt
+            end
+            push!(errors, abs(total_energy(ws) - E0))
+        end
+
+        # dt halves → error should drop by ~2^4=16 asymptotically; require > 6
+        ratio_1 = errors[1] / errors[2]
+        ratio_2 = errors[2] / errors[3]
+        @test ratio_1 > 6
+        @test ratio_2 > 6
+    end
+
     @testset "Yoshida adaptive simulation (1D)" begin
         config = GridConfig(64, 20.0)
         grid = make_grid(config)

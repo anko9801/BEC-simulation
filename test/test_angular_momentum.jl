@@ -133,6 +133,44 @@ using LinearAlgebra
         @test Jz > 0       # total
     end
 
+    @testset "J_z conservation during dynamics (2D vortex)" begin
+        N = 32
+        L = 10.0
+        grid = make_grid(GridConfig((N, N), (L, L)))
+        plans = make_fft_plans(grid.config.n_points)
+        sys = SpinSystem(1)
+        dV = cell_volume(grid)
+
+        psi0 = zeros(ComplexF64, N, N, 3)
+        sigma = L / 6
+        for j in 1:N, i in 1:N
+            x, y = grid.x[1][i], grid.x[2][j]
+            r = sqrt(x^2 + y^2)
+            phi = atan(y, x)
+            core = r / (r + 0.5)
+            env = exp(-(r / sigma)^2)
+            psi0[i, j, 1] = core * env * exp(im * phi)  # m=+1, winding=+1
+        end
+        psi0 ./= sqrt(sum(abs2, psi0) * dV)
+
+        interactions = InteractionParams(10.0, -0.5)
+        sp = SimParams(; dt=0.001, n_steps=200, imaginary_time=false, save_every=200)
+        ws = make_workspace(;
+            grid, atom=Rb87, interactions, sim_params=sp, psi_init=psi0,
+            potential=HarmonicTrap(1.0, 1.0),
+            zeeman=ZeemanParams(0.0, 0.0),
+        )
+
+        Jz0 = total_angular_momentum(ws.state.psi, grid, plans, sys)
+
+        for _ in 1:200
+            split_step!(ws)
+        end
+
+        Jz_final = total_angular_momentum(ws.state.psi, grid, plans, sys)
+        @test abs(Jz_final - Jz0) < 0.05
+    end
+
     @testset "probability_current: 2D components" begin
         grid = make_grid(GridConfig((32, 32), (10.0, 10.0)))
         sys = SpinSystem(1)

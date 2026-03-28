@@ -258,6 +258,54 @@
         @test sum(abs2, ws.state.psi) * dV ≈ norm0 rtol = 1e-4
     end
 
+    @testset "F=2 tensor ground state: AFM (c1>0)" begin
+        F = 2
+        grid = make_grid(GridConfig((32,), (10.0,)))
+        atom = AtomSpecies("test-f2", 1e-25, 2, 0.0, 0.0, 0.0, 0.0)
+
+        c0, c1 = 50.0, 5.0
+        c_extra = [0.0, 0.0, 2.0]  # c4 nonzero → tensor_cache active
+        interactions = InteractionParams(c0, c1, 0.0, c_extra)
+
+        result = find_ground_state(;
+            grid, atom, interactions,
+            potential=HarmonicTrap(1.0),
+            dt=0.002, n_steps=5000, tol=1e-8,
+            initial_state=:polar,
+        )
+        @test result.converged
+
+        psi = result.workspace.state.psi
+        sys = SpinSystem(F)
+        mag = magnetization(psi, grid, sys)
+        @test abs(mag) < 0.1
+    end
+
+    @testset "F=2 tensor ground state: FM (c1<0)" begin
+        F = 2
+        grid = make_grid(GridConfig((32,), (10.0,)))
+        atom = AtomSpecies("test-f2", 1e-25, 2, 0.0, 0.0, 0.0, 0.0)
+
+        c0, c1 = 50.0, -5.0
+        c_extra = [0.0, 0.0, 2.0]  # c4 nonzero → tensor_cache active
+        interactions = InteractionParams(c0, c1, 0.0, c_extra)
+
+        result = find_ground_state(;
+            grid, atom, interactions,
+            potential=HarmonicTrap(1.0),
+            zeeman=ZeemanParams(0.1, 0.0),
+            dt=0.002, n_steps=5000, tol=1e-8,
+            initial_state=:ferromagnetic,
+        )
+        @test result.converged
+
+        psi = result.workspace.state.psi
+        D = 2F + 1
+        dV = cell_volume(grid)
+        pop_m2 = sum(abs2, @view(psi[:, 1])) * dV
+        @test pop_m2 > 0.9
+    end
+
     @testset "Workspace without tensor cache" begin
         grid = make_grid(GridConfig((16,), (10.0,)))
         interactions = InteractionParams(100.0, 10.0)
