@@ -199,6 +199,12 @@
         @test abs(N1 - N0) / N0 < 1e-6
     end
 
+    @testset "secular=true emits validity warning" begin
+        config = GridConfig((8, 8, 8), (10.0, 10.0, 10.0))
+        grid = make_grid(config)
+        @test_logs (:warn, r"secular approximation") make_ddi_params(grid, Eu151; secular=true)
+    end
+
     @testset "DDI requires explicit c_dd for dipolar atoms" begin
         config = GridConfig((8,), (10.0,))
         grid = make_grid(config)

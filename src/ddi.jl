@@ -41,9 +41,13 @@ end
 Build DDI k-space tensor Q_αβ(k) stored at rfft half-shape.
 
 When `secular=true`, uses the secular (Larmor-averaged) approximation valid when
-the Larmor precession frequency ω_L ≫ DDI interaction rate.
+the Larmor precession frequency ω_L ≫ c_dd × peak_density. If this condition is
+not satisfied, the full (non-secular) tensor should be used instead.
 """
 function make_ddi_params(grid::Grid{N}, atom::AtomSpecies; c_dd::Float64=compute_c_dd(atom), secular::Bool=false) where {N}
+    if secular
+        @warn "DDI secular approximation: ensure ω_Larmor ≫ c_dd × peak_density" maxlog=1
+    end
     C_dd = c_dd
     n_pts = grid.config.n_points
     rk_shape = rfft_output_shape(n_pts)
