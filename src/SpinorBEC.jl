@@ -134,7 +134,7 @@ export get_cn
 export spin_mixing_period, spin_mixing_period_si, quadratic_zeeman_from_field
 export healing_length_contact, healing_length_spin, healing_length_ddi
 export thomas_fermi_radius, thomas_fermi_radius_harmonic
-export phase_diagram_point, component_populations
+export phase_diagram_point, component_populations, make_conservation_monitor
 
 # Simulation
 export find_ground_state, run_simulation!, run_simulation_adaptive!, run_simulation_yoshida!, make_workspace, init_psi

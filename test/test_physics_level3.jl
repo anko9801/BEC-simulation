@@ -132,4 +132,49 @@ using LinearAlgebra
         @test n2 / n_total > 0.95
     end
 
+    @testset "Na23 physical a_S → polar ground state" begin
+        gc = GridConfig((128,), (20.0,))
+        grid = make_grid(gc)
+
+        ip = compute_interaction_params(Na23; N_atoms=1000, dims=1, length_scale=1.0)
+        @test ip.c1 > 0
+
+        result = find_ground_state(;
+            grid, atom=Na23,
+            interactions=ip,
+            potential=HarmonicTrap(1.0),
+            dt=0.005, n_steps=5000,
+            initial_state=:polar,
+        )
+
+        psi = result.workspace.state.psi
+        dV = cell_volume(grid)
+        n0 = sum(abs2, @view(psi[:, 2])) * dV
+        n_total = sum(abs2, psi) * dV
+        @test n0 / n_total > 0.95
+    end
+
+    @testset "F=1 phase transition: c₁ sign flip → ferro" begin
+        gc = GridConfig((128,), (20.0,))
+        grid = make_grid(gc)
+
+        ip_na = compute_interaction_params(Na23; N_atoms=1000, dims=1, length_scale=1.0)
+        ip_flip = InteractionParams(ip_na.c0, -abs(ip_na.c1))
+
+        result = find_ground_state(;
+            grid, atom=Na23,
+            interactions=ip_flip,
+            potential=HarmonicTrap(1.0),
+            zeeman=ZeemanParams(0.1, 0.0),
+            dt=0.005, n_steps=5000,
+            initial_state=:ferromagnetic,
+        )
+
+        psi = result.workspace.state.psi
+        dV = cell_volume(grid)
+        n_m1 = sum(abs2, @view(psi[:, 1])) * dV
+        n_total = sum(abs2, psi) * dV
+        @test n_m1 / n_total > 0.95
+    end
+
 end
