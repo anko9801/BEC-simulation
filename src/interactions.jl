@@ -112,8 +112,13 @@ Convert physical density (c₀) and spin (c₁) couplings to channel couplings g
   g_S = c₀ + c₁(S(S+1) − 2F(F+1))/2
 
 This is the physical relation, NOT the 6j tensor transform. It gives:
-- F=1: g₀ = c₀ − 2c₁, g₂ = c₀ + c₁
+- F=1: g₀ = c₀ − 2c₁, g₂ = c₀ + c₁  (exact: 2 params → 2 channels)
 - General F: g_S for all even S ∈ 0:2:2F
+
+For F≥2, two parameters (c₀, c₁) constrain F+1 independent channels g_S to a
+one-parameter family. This is appropriate when higher scattering lengths are
+unknown (e.g. Eu151). To specify independent g_S, provide higher-rank couplings
+via `c_extra` or use `_make_tensor_cache_from_channels` directly.
 """
 function _c0c1_to_gS(F::Int, c0::Float64, c1::Float64)
     Dict{Int,Float64}(

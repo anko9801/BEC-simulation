@@ -111,7 +111,8 @@ Handles both real-time (Dz: cis) and imaginary-time (Dz: exp) propagation.
         phase *= z_neg_alpha
     end
 
-    # Ry(-β) = V · diag(exp(+iβλ)) · Vt via recurrence
+    # Ry(-β) = V · diag(exp(+iβλ)) · Vt via recurrence.
+    # Assumes λ_Fy = -F, -F+1, ..., F (ascending), guaranteed by eigen(Hermitian(...)).
     phase = ry_phase
     @inbounds for i in 1:D
         s = zero(ComplexF64)
