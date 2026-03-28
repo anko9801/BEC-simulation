@@ -87,7 +87,7 @@ function _compute_and_convolve_ddi_padded!(
     mul!(ctx.Fy_pad_rk, rp.forward, ctx.Fy_pad)
     mul!(ctx.Fz_pad_rk, rp.forward, ctx.Fz_pad)
 
-    C = ddi.C_dd
+    C = ddi.C_dd  # C_dd from unpadded DDIParams; both are constructed with the same value
     rk_shape = rp.rk_shape
     @inbounds for I in CartesianIndices(rk_shape)
         fk_x = ctx.Fx_pad_rk[I]

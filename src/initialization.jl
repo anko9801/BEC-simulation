@@ -106,6 +106,19 @@ function make_workspace(;
     batched_kinetic = _make_batched_kinetic_cache(psi, kinetic_phase, N; flags=fft_flags)
 
     F = atom.F
+    # Tensor interaction path activation:
+    # c_extra[idx] = c_{idx+1} stores higher-rank tensor couplings (c₂, c₃, ...).
+    # Only even-rank k ∈ {4, 6, ..., 2F} triggers the full tensor_cache, because the
+    # 6j transform (_c_extra_to_delta_gS) maps even-rank c_k to channel g_S.
+    #
+    # Lower-rank terms are handled by dedicated steps:
+    #   k=0 (c₀): diagonal step    k=1 (c₁): spin_mixing step
+    #   k=2 (c₂): nematic step     k=3: skipped (odd rank; see below)
+    #
+    # Note on Kawaguchi-Ueda convention: their c₃ Σ_M|A₂M|² (F=3) is a coupling
+    # to the S=2 pair channel, NOT a rank-3 tensor operator. To include such terms,
+    # map them to g_S channel couplings directly via _make_tensor_cache_from_channels,
+    # bypassing c_extra entirely.
     has_higher_c_extra = any(
         i -> iseven(i + 1) && (i + 1) >= 4 && (i + 1) <= 2F && abs(interactions.c_extra[i]) > 1e-30,
         eachindex(interactions.c_extra),

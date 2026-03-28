@@ -208,6 +208,9 @@ function _tensor_step_point!(
         spinor[c] = psi[I, c]
     end
 
+    n_local = real(sum(c -> abs2(spinor[c]), 1:D))
+    n_local < 1e-20 && return nothing
+
     fill!(h, zero(ComplexF64))
     for entry in hf_entries
         @inbounds h[entry.c_m, entry.c_mp] += cache.g_values[entry.ch_idx] *
