@@ -1,15 +1,13 @@
 """
 Apply density-dependent loss step (dipolar relaxation + optional 3-body).
 
-Dipolar relaxation rate per component m accounts for all Δm channels allowed by
-the rank-2 tensor structure of DDI (Δm = 0, ±1, ±2):
+Dipolar relaxation rate per component m for downward Δm transitions (Δm = -1, -2):
 
-  γ_m = Γ_dr × Σ_{q=-2}^{2} |⟨F,m+q|T²_q|F,m⟩|² / Z
+  γ_m = Γ_dr × Σ_{q ∈ {-1,-2}} |⟨F,m+q|T²_q|F,m⟩|² / Z
 
-where Z = Σ_m Σ_q |CG|² = F(F+1)(2F+1)(2F+3)(2F-1)/15 normalizes the total rate.
+where Z normalizes so the average rate per component equals Γ_dr.
 
-For F=1 this reduces to the Δm=+1 only result: m=-F is stable.
-For F≥2 all |m|<F states can relax via Δm=0 and ±2 as well.
+m = -F is stable (no downward transitions exist).
 
 3-body loss L3 is m-independent.
 
