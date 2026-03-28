@@ -43,4 +43,5 @@ using SpinorBEC
     include("test_spherical_harmonics.jl")
     include("test_spectral.jl")
     include("test_checkpoint.jl")
+    include("test_continuation.jl")
 end

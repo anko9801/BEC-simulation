@@ -274,6 +274,64 @@ function _normalize_psi_constrained!(psi, grid, n_components, ndim, target_Mz, F
     nothing
 end
 
+"""
+    scan_continuation(; param_values, make_interactions, grid, atom, ...) → Vector{NamedTuple}
+
+Sweep a parameter using continuation: use previous ground state as initial guess for
+next point. Falls back to multistart search on energy jumps.
+"""
+function scan_continuation(;
+    param_values::AbstractVector{Float64},
+    make_interactions::Function,
+    grid,
+    atom,
+    initial_state::Symbol=:polar,
+    energy_jump_threshold::Float64=0.1,
+    n_steps_continuation::Int=500,
+    n_steps_fresh::Int=5000,
+    kwargs...,
+)
+    results = NamedTuple[]
+    prev_psi = nothing
+    prev_energy = NaN
+
+    sm = spin_matrices(atom.F)
+
+    for (i, val) in enumerate(param_values)
+        interactions = make_interactions(val)
+
+        r = if prev_psi !== nothing
+            find_ground_state(; grid, atom, interactions,
+                              psi_init=copy(prev_psi),
+                              n_steps=n_steps_continuation, kwargs...)
+        else
+            find_ground_state(; grid, atom, interactions,
+                              initial_state, n_steps=n_steps_fresh, kwargs...)
+        end
+
+        if !isnan(prev_energy) && abs(r.energy - prev_energy) / max(abs(prev_energy), 1e-30) > energy_jump_threshold
+            r = find_ground_state_multistart(; grid, atom, interactions,
+                                              n_steps=n_steps_fresh, kwargs...)
+        end
+
+        ws = r.workspace
+        phase_info = classify_phase(ws.state.psi, atom.F, grid, sm)
+
+        push!(results, (
+            param=val,
+            energy=r.energy,
+            converged=r.converged,
+            phase=phase_info.phase,
+            psi=copy(ws.state.psi),
+        ))
+
+        prev_psi = copy(ws.state.psi)
+        prev_energy = r.energy
+    end
+
+    results
+end
+
 function _rebuild_workspace_with_dt(ws::Workspace{N}, new_dt::Float64) where {N}
     sp = SimParams(new_dt, ws.sim_params.n_steps, true,
                    ws.sim_params.normalize_every, ws.sim_params.save_every)

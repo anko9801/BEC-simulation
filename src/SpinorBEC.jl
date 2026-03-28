@@ -146,7 +146,7 @@ export classify_phase, estimate_splitting_error, validate_conservation
 export power_spectrum
 
 # Simulation
-export find_ground_state, find_ground_state_multistart
+export find_ground_state, find_ground_state_multistart, scan_continuation
 export run_simulation!, run_simulation_checkpointed!
 export run_simulation_adaptive!, run_simulation_yoshida!, make_workspace, init_psi
 
