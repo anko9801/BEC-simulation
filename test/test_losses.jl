@@ -184,6 +184,22 @@
         @test N1 < N0
     end
 
+    @testset "leapfrog with loss: norm decreases" begin
+        config = GridConfig(64, 20.0)
+        grid = make_grid(config)
+        sp = SimParams(; dt=0.01, n_steps=100, save_every=100)
+        ws = make_workspace(;
+            grid, atom=Rb87,
+            interactions=InteractionParams(1.0, 0.0),
+            sim_params=sp,
+            loss=LossParams(0.5, 0.0),
+        )
+        N0 = total_norm(ws.state.psi, ws.grid)
+        result = run_simulation!(ws)
+        N1 = total_norm(ws.state.psi, ws.grid)
+        @test N1 < N0
+    end
+
     @testset "Loss skipped during imaginary time" begin
         config = GridConfig(64, 20.0)
         grid = make_grid(config)

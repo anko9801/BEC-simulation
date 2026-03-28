@@ -71,6 +71,10 @@ function _run_simulation_leapfrog!(ws::Workspace{N}, sp, sys, times, energies, n
             _half_potential_step!(ws, dt, n_comp, N, false)
         end
 
+        if ws.loss !== nothing
+            apply_loss_step!(ws.state.psi, ws.loss, sys.F, dt, n_comp, N, ws.density_buf)
+        end
+
         ws.state.t += dt
         ws.state.step += 1
 
