@@ -5,7 +5,8 @@ const Rb87 = AtomSpecies(
     101.8 * Units.BOHR_RADIUS,   # a0 (F_tot=0)
     100.4 * Units.BOHR_RADIUS,   # a2 (F_tot=2)
     0.0,                          # non-dipolar
-    -0.5,                         # g_F (F=1 ground state)
+    -0.5;                         # g_F (F=1 ground state)
+    Delta_E_hf = 6.834682610904e9 * 2π * Units.HBAR,  # 6.835 GHz
 )
 
 const Na23 = AtomSpecies(
@@ -15,7 +16,8 @@ const Na23 = AtomSpecies(
     50.0 * Units.BOHR_RADIUS,    # a0
     55.0 * Units.BOHR_RADIUS,    # a2
     0.0,                          # non-dipolar
-    -0.5,                         # g_F (F=1 ground state)
+    -0.5;                         # g_F (F=1 ground state)
+    Delta_E_hf = 1.771626128e9 * 2π * Units.HBAR,  # 1.772 GHz
 )
 
 # ¹⁵¹Eu: ⁸S₇/₂ ground state (J=7/2, I=5/2, F=6)

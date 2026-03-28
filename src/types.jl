@@ -80,6 +80,7 @@ Atomic species for spinor BEC simulation.
 - `g_F`: Landé g-factor
 - `scattering_lengths`: Dict{Int,Float64} mapping total spin S => a_S (m).
                          Empty when channel-resolved data is unavailable.
+- `Delta_E_hf`: hyperfine splitting (J). Zero if unknown/not applicable.
 """
 struct AtomSpecies
     name::String
@@ -91,35 +92,39 @@ struct AtomSpecies
     mu_mag::Float64
     g_F::Float64
     scattering_lengths::Dict{Int,Float64}
+    Delta_E_hf::Float64
 
-    function AtomSpecies(name, mass, F, a0, a2, mu_mag, g_F, scattering_lengths)
+    function AtomSpecies(name, mass, F, a0, a2, mu_mag, g_F, scattering_lengths;
+                         Delta_E_hf::Float64=0.0)
         a_s = F == 1 ? (a0 + 2a2) / 3 : a0
-        new(name, mass, F, a0, a2, a_s, mu_mag, g_F, scattering_lengths)
+        new(name, mass, F, a0, a2, a_s, mu_mag, g_F, scattering_lengths, Delta_E_hf)
     end
 
-    function AtomSpecies(name, mass, F, a0, a2, mu_mag, g_F::Real)
+    function AtomSpecies(name, mass, F, a0, a2, mu_mag, g_F::Real;
+                         Delta_E_hf::Float64=0.0)
         sl = if F == 1 && (a0 != 0.0 || a2 != 0.0)
             Dict{Int,Float64}(0 => a0, 2 => a2)
         else
             Dict{Int,Float64}()
         end
         a_s = F == 1 ? (a0 + 2a2) / 3 : a0
-        new(name, mass, F, a0, a2, a_s, mu_mag, Float64(g_F), sl)
+        new(name, mass, F, a0, a2, a_s, mu_mag, Float64(g_F), sl, Delta_E_hf)
     end
 
-    function AtomSpecies(name, mass, F, a0, a2, mu_mag, scattering_lengths::Dict)
+    function AtomSpecies(name, mass, F, a0, a2, mu_mag, scattering_lengths::Dict;
+                         Delta_E_hf::Float64=0.0)
         a_s = F == 1 ? (a0 + 2a2) / 3 : a0
-        new(name, mass, F, a0, a2, a_s, mu_mag, 0.0, scattering_lengths)
+        new(name, mass, F, a0, a2, a_s, mu_mag, 0.0, scattering_lengths, Delta_E_hf)
     end
 
-    function AtomSpecies(name, mass, F, a0, a2, mu_mag)
+    function AtomSpecies(name, mass, F, a0, a2, mu_mag; Delta_E_hf::Float64=0.0)
         sl = if F == 1 && (a0 != 0.0 || a2 != 0.0)
             Dict{Int,Float64}(0 => a0, 2 => a2)
         else
             Dict{Int,Float64}()
         end
         a_s = F == 1 ? (a0 + 2a2) / 3 : a0
-        new(name, mass, F, a0, a2, a_s, mu_mag, 0.0, sl)
+        new(name, mass, F, a0, a2, a_s, mu_mag, 0.0, sl, Delta_E_hf)
     end
 end
 
