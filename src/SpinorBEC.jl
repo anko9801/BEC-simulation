@@ -131,6 +131,7 @@ export superfluid_velocity, total_angular_momentum, spin_texture_charge
 export superfluid_vorticity, berry_curvature, singlet_pair_amplitude
 export pair_amplitude, pair_amplitude_spectrum
 export majorana_stars, icosahedral_order_parameter
+export nematic_tensor_eigenvalues, biaxiality_parameter
 export get_cn
 
 # Diagnostics

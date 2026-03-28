@@ -39,4 +39,5 @@ using SpinorBEC
     include("test_interactions_constraint.jl")
     include("test_io.jl")
     include("test_analytic_ground_states.jl")
+    include("test_nematic_tensor.jl")
 end
