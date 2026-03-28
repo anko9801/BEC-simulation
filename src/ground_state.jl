@@ -15,13 +15,20 @@ end
 
 _validate_itp_zeeman(::TimeDependentZeeman, F, dt) = nothing
 
-function _validate_itp_interactions(interactions::InteractionParams, F, dt)
+function _validate_itp_interactions(interactions::InteractionParams, F, dt; psi=nothing)
     max_c = max(abs(interactions.c0), abs(interactions.c1))
     max_c < 1e-30 && return nothing
-    max_exponent = max_c * F * dt / 4
+    n_peak = if psi !== nothing
+        ndim = ndims(psi) - 1
+        Float64(maximum(total_density(psi, ndim)))
+    else
+        1.0
+    end
+    max_exponent = max_c * n_peak * dt / 4
     if max_exponent > _ITP_EXPONENT_LIMIT
         throw(ArgumentError(
-            "Spin interaction c0=$(interactions.c0), c1=$(interactions.c1) with F=$F and dt=$dt " *
+            "Spin interaction c0=$(interactions.c0), c1=$(interactions.c1) with " *
+            "n_peak≈$(round(n_peak, sigdigits=3)) and dt=$dt " *
             "may cause overflow in imaginary time (estimated exponent=$(round(max_exponent, digits=1)) " *
             "> $_ITP_EXPONENT_LIMIT). Reduce c0/c1 magnitude or dt."
         ))
@@ -54,7 +61,7 @@ function find_ground_state(;
     end
 
     _validate_itp_zeeman(zeeman, atom.F, dt)
-    _validate_itp_interactions(interactions, atom.F, dt)
+    _validate_itp_interactions(interactions, atom.F, dt; psi=psi0)
 
     if adaptive_dt
         return _find_ground_state_adaptive(;
