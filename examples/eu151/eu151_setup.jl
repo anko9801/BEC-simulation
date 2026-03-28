@@ -1,5 +1,5 @@
 include(joinpath(@__DIR__, "eu151_params.jl"))
-using JLD2, Random
+using JLD2
 
 function load_or_compute_gs(grid; cache_suffix="", trap=HarmonicTrap((1.0, 1.0, EU_λ_z)))
     N_GRID = grid.config.n_points[1]
@@ -21,11 +21,4 @@ function load_or_compute_gs(grid; cache_suffix="", trap=HarmonicTrap((1.0, 1.0, 
     jldsave(gs_cache; psi=psi_out)
     println("  cached → $gs_cache")
     psi_out
-end
-
-function seed_noise(psi_gs, n_comp, ndim, grid; amp=0.001, seed=42)
-    psi = copy(psi_gs)
-    Random.seed!(seed)
-    SpinorBEC._add_noise!(psi, amp, n_comp, ndim, grid)
-    psi
 end

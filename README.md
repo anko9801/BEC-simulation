@@ -400,7 +400,7 @@ println(TIMER)       # hierarchical timing report
 disable_tracing!()
 ```
 
-Benchmark scripts in `examples/` (e.g., `bench_eu151.jl`) include tracing setup.
+Benchmark scripts in `examples/eu151/` (e.g., `bench_eu151.jl`) include tracing setup.
 
 ## Source Organization
 

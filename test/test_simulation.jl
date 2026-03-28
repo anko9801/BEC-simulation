@@ -44,6 +44,24 @@ using SpinorBEC
         @test n3 < 0.05
     end
 
+    @testset "seed_noise returns noisy copy preserving norm" begin
+        config = GridConfig(64, 10.0)
+        grid = make_grid(config)
+        sys = SpinSystem(1)
+        psi_gs = init_psi(grid, sys; state=:ferromagnetic)
+        dV = cell_volume(grid)
+
+        psi_noisy = seed_noise(psi_gs, sys.n_components, 1, grid)
+
+        @test psi_noisy !== psi_gs
+        @test psi_noisy != psi_gs
+        norm_noisy = sum(abs2, psi_noisy) * dV
+        @test abs(norm_noisy - 1.0) < 1e-10
+
+        psi_noisy2 = seed_noise(psi_gs, sys.n_components, 1, grid)
+        @test psi_noisy ≈ psi_noisy2
+    end
+
     @testset "run_simulation! returns result" begin
         config = GridConfig(64, 10.0)
         grid = make_grid(config)

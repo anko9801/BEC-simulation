@@ -166,3 +166,11 @@ function _add_noise!(psi, amplitude, n_components, ndim, grid)
     norm = sqrt(sum(abs2, psi) * dV)
     psi ./= norm
 end
+
+function seed_noise(psi_gs, n_components::Int, ndim::Int, grid::Grid;
+                    amplitude::Float64=0.001, seed::Int=42)
+    psi = copy(psi_gs)
+    Random.seed!(seed)
+    _add_noise!(psi, amplitude, n_components, ndim, grid)
+    psi
+end

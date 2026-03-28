@@ -7,6 +7,7 @@ using JLD2
 using YAML
 using Unitful
 using TimerOutputs
+using Random
 
 const TIMER = TimerOutput()
 
@@ -146,7 +147,7 @@ export save_state, load_state, save_experiment_result, load_experiment_result
 export ConstantValue, LinearRamp, RampOrConstant, interpolate_value
 export PotentialConfig, PhaseConfig, GroundStateConfig, DDIConfig
 export SystemConfig, ExperimentConfig, ExperimentResult
-export load_experiment, load_experiment_from_string, run_experiment
+export load_experiment, load_experiment_from_string, run_experiment, seed_noise
 
 # Units
 export Units

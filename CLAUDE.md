@@ -18,7 +18,7 @@ julia --project=. -e 'using SpinorBEC'
 julia --project=. -e 'using Pkg; Pkg.instantiate()'
 
 # Benchmark Eu151 3D (with tracing)
-julia --project=. examples/bench_eu151.jl
+julia --project=. examples/eu151/bench_eu151.jl
 ```
 
 ## Architecture
@@ -92,7 +92,7 @@ Instrumented with `@timeit_debug TIMER` on all sub-steps for profiling.
 - `run_simulation_adaptive!(ws; adaptive, t_end, ...)` — adaptive dt with PI controller
 - `load_experiment("path.yaml") → ExperimentConfig` then `run_experiment(config)` — YAML-driven
 - `save_experiment_result(path, result)` / `load_experiment_result(path)` — JLD2 round-trip
-- `examples/run_experiment.jl` — batch runner: pass a directory to run all YAMLs
+- `examples/configs/run_experiment.jl` — batch runner: pass a directory to run all YAMLs
 
 ### Tracing / Profiling
 
@@ -121,5 +121,5 @@ disable_tracing!()
 - New struct types must be defined in `types.jl` (included first, referenced everywhere)
 - Julia 1.12: use inner constructors for normalization/validation (method overwriting forbidden during precompilation)
 - Atoms defined in `atoms.jl` as constants (`Rb87`, `Na23`, `Eu151`)
-- YAML configs in `examples/` follow the schema in `experiment.jl`
+- YAML configs in `examples/configs/` follow the schema in `experiment.jl`
 - Workspace is fully parameterized — auto-inferred constructor, no explicit type params needed
