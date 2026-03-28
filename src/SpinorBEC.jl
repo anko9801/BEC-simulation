@@ -147,7 +147,8 @@ export power_spectrum
 
 # Simulation
 export find_ground_state, find_ground_state_multistart
-export run_simulation!, run_simulation_adaptive!, run_simulation_yoshida!, make_workspace, init_psi
+export run_simulation!, run_simulation_checkpointed!
+export run_simulation_adaptive!, run_simulation_yoshida!, make_workspace, init_psi
 
 # I/O
 export save_state, load_state, save_experiment_result, load_experiment_result

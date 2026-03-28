@@ -42,4 +42,5 @@ using SpinorBEC
     include("test_nematic_tensor.jl")
     include("test_spherical_harmonics.jl")
     include("test_spectral.jl")
+    include("test_checkpoint.jl")
 end

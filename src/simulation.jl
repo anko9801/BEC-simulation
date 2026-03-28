@@ -92,3 +92,57 @@ function _run_simulation_leapfrog!(ws::Workspace{N}, sp, sys, times, energies, n
         end
     end
 end
+
+function run_simulation_checkpointed!(ws::Workspace{N};
+    checkpoint_dir::String="checkpoints",
+    checkpoint_every::Int=1000,
+    callback::Union{Nothing,Function}=nothing,
+    resume::Bool=false,
+) where {N}
+    mkpath(checkpoint_dir)
+
+    if resume
+        existing = filter(f -> startswith(basename(f), "step_") && endswith(f, ".jld2"),
+                          readdir(checkpoint_dir, join=true))
+        if !isempty(existing)
+            sort!(existing)
+            latest = existing[end]
+            data = load_state(latest)
+            copyto!(ws.state.psi, data.psi)
+            ws.state.t = data.t
+            ws.state.step = data.step
+        end
+    end
+
+    start_step = ws.state.step
+    remaining = ws.sim_params.n_steps - start_step
+    remaining <= 0 && return run_simulation!(ws; callback)
+
+    checkpoint_cb = function(ws_cb, step)
+        global_step = start_step + step
+        if global_step % checkpoint_every == 0
+            fname = joinpath(checkpoint_dir, "step_$(lpad(global_step, 8, '0')).jld2")
+            save_state(fname, ws_cb)
+        end
+        callback !== nothing && callback(ws_cb, step)
+    end
+
+    sp_orig = ws.sim_params
+    sp_remain = SimParams(sp_orig.dt, remaining, sp_orig.imaginary_time,
+                          sp_orig.normalize_every, sp_orig.save_every)
+
+    ws_remain = Workspace(
+        ws.state, ws.fft_plans, ws.kinetic_phase, ws.potential_values, ws.density_buf,
+        ws.spin_matrices, ws.grid, ws.atom, ws.interactions,
+        ws.zeeman, ws.potential, sp_remain, ws.ddi, ws.ddi_bufs, ws.raman, ws.loss,
+        ws.ddi_padded, ws.batched_kinetic, ws.tensor_cache,
+    )
+
+    result = run_simulation!(ws_remain; callback=checkpoint_cb)
+
+    ws.state.t = ws_remain.state.t
+    ws.state.step = start_step + remaining
+    copyto!(ws.state.psi, ws_remain.state.psi)
+
+    result
+end
