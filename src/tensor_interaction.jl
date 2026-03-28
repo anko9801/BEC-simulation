@@ -140,8 +140,15 @@ function apply_tensor_interaction_step!(
 
     hf_entries = _precompute_hf_entries(cache)
 
+    nthr = Threads.maxthreadid()
+    spinor_bufs = [Vector{ComplexF64}(undef, D) for _ in 1:nthr]
+    h_bufs = [Matrix{ComplexF64}(undef, D, D) for _ in 1:nthr]
+    tmp_bufs = [Vector{ComplexF64}(undef, D) for _ in 1:nthr]
+
     Threads.@threads for I in CartesianIndices(n_pts)
-        @inbounds _tensor_step_point!(psi, I, cache, hf_entries, dt, imaginary_time)
+        tid = Threads.threadid()
+        @inbounds _tensor_step_point!(psi, I, cache, hf_entries, dt, imaginary_time,
+                                       spinor_bufs[tid], h_bufs[tid], tmp_bufs[tid])
     end
     nothing
 end
@@ -191,15 +198,17 @@ function _tensor_step_point!(
     hf_entries::Vector{HFEntry},
     dt::Float64,
     imaginary_time::Bool,
+    spinor::Vector{ComplexF64},
+    h::Matrix{ComplexF64},
+    tmp::Vector{ComplexF64},
 )
     D = cache.D
 
-    spinor = Vector{ComplexF64}(undef, D)
     @inbounds for c in 1:D
         spinor[c] = psi[I, c]
     end
 
-    h = zeros(ComplexF64, D, D)
+    fill!(h, zero(ComplexF64))
     for entry in hf_entries
         @inbounds h[entry.c_m, entry.c_mp] += cache.g_values[entry.ch_idx] *
             entry.cg_prod * conj(spinor[entry.c_mu]) * spinor[entry.c_nu]
@@ -209,19 +218,12 @@ function _tensor_step_point!(
     vals = eig.values
     vecs = eig.vectors
 
-    if imaginary_time
-        phases = [exp(-vals[k] * dt) for k in 1:D]
-    else
-        phases = [cis(-vals[k] * dt) for k in 1:D]
-    end
-
-    tmp = Vector{ComplexF64}(undef, D)
     @inbounds for k in 1:D
         s = zero(ComplexF64)
         for j in 1:D
             s += conj(vecs[j, k]) * spinor[j]
         end
-        tmp[k] = phases[k] * s
+        tmp[k] = (imaginary_time ? exp(-vals[k] * dt) : cis(-vals[k] * dt)) * s
     end
 
     @inbounds for i in 1:D
