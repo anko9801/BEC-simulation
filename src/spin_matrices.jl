@@ -36,6 +36,11 @@ function spin_matrices(F::Int)
     FdF = SMatrix{n,n,ComplexF64}(F_dot_F_dense)
 
     eig_Fy = eigen(Hermitian(Fy_dense))
+    # Euler angle recurrence in spinor_utils.jl assumes eigenvalues are -F, -F+1, ..., F.
+    # eigen(Hermitian(...)) guarantees ascending order; verify unit spacing.
+    @assert all(i -> abs(eig_Fy.values[i+1] - eig_Fy.values[i] - 1.0) < 1e-10, 1:n-1) (
+        "Fy eigenvalues not uniformly spaced: $(eig_Fy.values)"
+    )
     V_Fy = Matrix{ComplexF64}(eig_Fy.vectors)
     Vt_Fy = Matrix{ComplexF64}(eig_Fy.vectors')
     λ_Fy = SVector{n,Float64}(eig_Fy.values)

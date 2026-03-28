@@ -201,6 +201,28 @@ function compute_c_dd_dimless(atom::AtomSpecies; N_atoms::Int, omega_ref::Float6
 end
 
 """
+    compute_eu151_interactions(; N_atoms, omega_ref, c1_ratio, c_extra)
+
+Dimensionless interaction params for ¹⁵¹Eu (F=6) with mandatory c₁/c₀ ratio.
+
+Individual scattering lengths a_S are unknown for Eu, so `compute_interaction_params`
+falls back to c₁=0 with a warning. This wrapper prevents that silent fallback by
+requiring an explicit `c1_ratio`.
+
+Physical estimates for c1_ratio:
+- `0.0`: DDI-only (c₁=0, no spin-dependent contact)
+- `1/36`: Buchachenko et al. antiferromagnetic estimate
+- negative: ferromagnetic
+
+Returns `InteractionParams` with c₀+F²c₁ = 4π(a_s/a_ho)N.
+"""
+function compute_eu151_interactions(; N_atoms::Int, omega_ref::Float64,
+                                      c1_ratio::Float64, c_extra::Vector{Float64}=Float64[])
+    c_total = compute_c_total(Eu151; N_atoms, omega_ref)
+    interaction_params_from_constraint(; c_total, c1_ratio, F=6, c_extra)
+end
+
+"""
     linear_zeeman_p(atom, B, omega_ref)
 
 Dimensionless linear Zeeman shift: p = g_F × μ_B × B / (ℏ × omega_ref).

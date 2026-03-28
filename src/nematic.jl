@@ -3,6 +3,19 @@
 
 Apply the singlet-pair (nematic) interaction step: exp(-i c₂ |A₀₀|² dt).
 
+This handles the S=0 pair channel only (KU Eq. (48), first spin-singlet term).
+
+Kawaguchi-Ueda convention correspondence for contact interactions:
+- F=1: c₀n² + c₁|F|²  →  diagonal + spin_mixing           (2 channels, exact)
+- F=2: + c₂|A₀₀|²     →  + nematic                         (3 channels)
+- F=3: + c₃ Σ_M|A₂M|² →  NOT handled here (S=2 pair channel, not rank-3 tensor)
+- F≥4: higher c_k      →  NOT handled here
+
+For F≥2 with higher-rank interactions (c₃ and above in KU notation), use the
+tensor_cache path via `_make_tensor_cache_from_channels(F, g_S_dict)`, which
+handles all pair channels S=0,2,...,2F simultaneously. When tensor_cache is
+active, this nematic step is skipped (split_step.jl dispatch).
+
 The c₂ term couples m and -m components via a Bogoliubov-type transformation:
     i∂ψ_m/∂t = c₂ (-1)^{F-m}/√D × A₀₀ × ψ*_{-m}
 

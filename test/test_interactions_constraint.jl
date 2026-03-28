@@ -99,6 +99,18 @@
         @test ip.c1 ≈ 0.0
     end
 
+    @testset "compute_eu151_interactions" begin
+        omega = 2π * 110.0
+        ip = compute_eu151_interactions(; N_atoms=50_000, omega_ref=omega, c1_ratio=1.0/36)
+        c_total = compute_c_total(Eu151; N_atoms=50_000, omega_ref=omega)
+        @test ip.c0 + 36 * ip.c1 ≈ c_total rtol=1e-12
+        @test ip.c1 / ip.c0 ≈ 1.0/36 rtol=1e-12
+
+        ip0 = compute_eu151_interactions(; N_atoms=50_000, omega_ref=omega, c1_ratio=0.0)
+        @test ip0.c0 ≈ c_total
+        @test ip0.c1 ≈ 0.0
+    end
+
     @testset "compute_interaction_params fallback for missing scattering lengths" begin
         ip = @test_logs (:warn, r"No channel scattering lengths") compute_interaction_params(
             Eu151; N_atoms=1, dims=3)
