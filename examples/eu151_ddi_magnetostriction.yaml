@@ -1,0 +1,53 @@
+# ================================================================
+# DDI magnetostriction in spin-1 BEC (3D)
+# ================================================================
+#
+# Physics:
+#   Spin-1 (Rb87) BEC with artificial DDI strength matching Eu151
+#   (ε_dd ≈ 0.55). Ferromagnetic ground state elongates along z
+#   (magnetostriction from head-to-tail dipole alignment).
+#   Quadratic Zeeman ramp probes spin-domain dynamics under DDI.
+#
+# To compare with/without DDI: toggle ddi.enabled
+#
+# Units: dimensionless (ℏ = m = ω_ref = 1)
+# ================================================================
+
+experiment:
+  name: "DDI magnetostriction (spin-1, 3D)"
+
+  system:
+    atom: Rb87
+    grid:
+      n_points: [16, 16, 16]
+      box_size: [12.0, 12.0, 12.0]
+    interactions:
+      c0: 30.0
+      c1: -0.5
+    ddi:
+      enabled: true
+      c_dd: 16.4
+
+  ground_state:
+    dt: 0.002
+    n_steps: 5000
+    tol: 1.0e-10
+    initial_state: ferromagnetic
+    potential:
+      type: harmonic
+      omega: [1.0, 1.0, 1.0]
+
+  sequence:
+    # Ramp quadratic Zeeman q: 0 → 0.5 over 1.0 ω⁻¹
+    - name: zeeman_ramp
+      duration: 1.0
+      dt: 0.002
+      save_every: 100
+      zeeman:
+        p: 0.0
+        q:
+          from: 0.0
+          to: 0.5
+      potential:
+        type: harmonic
+        omega: [1.0, 1.0, 1.0]

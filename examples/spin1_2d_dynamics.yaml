@@ -1,0 +1,41 @@
+# ================================================================
+# Spin-1 BEC dynamics (2D)
+# ================================================================
+#
+# Physics:
+#   Rb87 spin-1 BEC in 2D harmonic trap. Uniform initial state
+#   evolves under contact interactions, generating spin domains.
+#   Use with view_dynamics_3d.jl for PlotlyJS 3D visualization.
+#
+# Units: dimensionless (ℏ = m = ω_ref = 1)
+# ================================================================
+
+experiment:
+  name: "Spin-1 2D dynamics"
+
+  system:
+    atom: Rb87
+    grid:
+      n_points: [64, 64]
+      box_size: [20.0, 20.0]
+    interactions:
+      c0: 8.0
+      c1: 0.8
+
+  ground_state:
+    dt: 0.005
+    n_steps: 5000
+    tol: 1.0e-10
+    initial_state: polar
+    potential:
+      type: harmonic
+      omega: [1.0, 1.0]
+
+  sequence:
+    - name: dynamics
+      duration: 1.0
+      dt: 0.002
+      save_every: 25
+      potential:
+        type: harmonic
+        omega: [1.0, 1.0]

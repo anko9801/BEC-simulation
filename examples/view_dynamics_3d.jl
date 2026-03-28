@@ -1,36 +1,27 @@
 using SpinorBEC
 using PlotlyJS
 
-println("=== 2D Spin-1 Dynamics → 3D Surface Visualization ===\n")
+path = length(ARGS) >= 1 ? ARGS[1] : joinpath(@__DIR__, "spin1_2d_dynamics.yaml")
 
-grid = make_grid(GridConfig((64, 64), (20.0, 20.0)))
-sys = SpinSystem(1)
-sm = spin_matrices(1)
+println("Loading experiment from: $path")
+config = load_experiment(path)
 
-psi0 = init_psi(grid, sys; state=:uniform)
+println("Running: $(config.name)")
+result = run_experiment(config)
 
-interactions = InteractionParams(8.0, 0.8)
-trap = HarmonicTrap(1.0, 1.0)
-sp = SimParams(; dt=0.002, n_steps=500, imaginary_time=false, save_every=25)
-
-ws = make_workspace(;
-    grid, atom=Rb87, interactions, potential=trap,
-    sim_params=sp, psi_init=psi0,
-)
-
-println("Running 2D dynamics ($(sp.n_steps) steps)...")
-result = run_simulation!(ws)
-println("  $(length(result.times)) frames captured")
-println("  Norm drift: $(abs(result.norms[end] - result.norms[1]))")
-
-# --- 3D Surface: single trace, slider restyles z data ---
-
-x, y = grid.x
-snapshots = result.psi_snapshots
-times = result.times
+phase = result.phase_results[end]
+snapshots = phase.psi_snapshots
+times = phase.times
 n_frames = length(snapshots)
+ndim = length(result.grid.n_points)
 
-densities = [collect(total_density(s, 2)') for s in snapshots]
+println("  $(n_frames) frames captured")
+println("  Norm drift: $(abs(phase.norms[end] - phase.norms[1]))")
+
+# --- 3D Surface: density slider ---
+
+x, y = result.grid.x[1], result.grid.x[2]
+densities = [collect(SpinorBEC.total_density(s, ndim)') for s in snapshots]
 n_max = maximum(maximum.(densities))
 
 trace = surface(
@@ -77,15 +68,17 @@ println("\nSaved: dynamics_3d.html")
 # --- Per-component 3D view ---
 
 psi_final = snapshots[end]
-nc = 3
+nc = size(psi_final)[end]
+labels = ["m=$(div(nc-1,2) - c + 1)" for c in 1:nc]
+
 fig_comp = make_subplots(
     rows=1, cols=nc,
-    specs=[Spec(kind="scene") Spec(kind="scene") Spec(kind="scene")],
-    subplot_titles=["m=+1" "m=0" "m=-1"],
+    specs=[Spec(kind="scene") for _ in 1:nc] |> permutedims,
+    subplot_titles=permutedims(labels),
 )
 
 for c in 1:nc
-    nc_density = component_density(psi_final, 2, c)
+    nc_density = SpinorBEC.component_density(psi_final, ndim, c)
     add_trace!(fig_comp, surface(
         x=x, y=y, z=collect(nc_density'),
         colorscale="Viridis", cmin=0, cmax=n_max,
@@ -95,7 +88,7 @@ end
 
 relayout!(fig_comp,
     title_text="Spin Components at t=$(round(times[end], digits=3))",
-    width=1200, height=500,
+    width=400 * nc, height=500,
 )
 
 for c in 1:nc
@@ -111,8 +104,9 @@ println("Saved: components_3d.html")
 
 # --- Spin texture: Fz/n as color on density surface ---
 
-fx, fy, fz = spin_density_vector(psi_final, sm, 2)
-n_final = total_density(psi_final, 2)
+sm = spin_matrices(div(nc - 1, 2))
+fx, fy, fz = SpinorBEC.spin_density_vector(psi_final, sm, ndim)
+n_final = SpinorBEC.total_density(psi_final, ndim)
 threshold = maximum(n_final) * 1e-6
 fz_norm = @. ifelse(n_final > threshold, fz / n_final, 0.0)
 

@@ -1,6 +1,6 @@
 using SpinorBEC
 
-path = length(ARGS) >= 1 ? ARGS[1] : joinpath(@__DIR__, "rb87_ground_state.yaml")
+path = length(ARGS) >= 1 ? ARGS[1] : joinpath(@__DIR__, "rb87_quench_dynamics.yaml")
 
 println("Loading experiment from: $path")
 config = load_experiment(path)
