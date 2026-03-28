@@ -1,23 +1,34 @@
 using SpinorBEC
 
-path = length(ARGS) >= 1 ? ARGS[1] : joinpath(@__DIR__, "rb87_quench_dynamics.yaml")
+function run_and_save(yaml_path)
+    println("Loading: $yaml_path")
+    config = load_experiment(yaml_path)
+    println("Running: $(config.name)")
 
-println("Loading experiment from: $path")
-config = load_experiment(path)
+    result = run_experiment(config)
 
-println("Running: $(config.name)")
-result = run_experiment(config)
+    if result.ground_state_energy !== nothing
+        println("  Ground state: E=$(result.ground_state_energy), converged=$(result.ground_state_converged)")
+    end
 
-if result.ground_state_energy !== nothing
-    println("\nGround state:")
-    println("  Energy:    $(result.ground_state_energy)")
-    println("  Converged: $(result.ground_state_converged)")
+    for (i, (name, sim)) in enumerate(zip(result.phase_names, result.phase_results))
+        println("  Phase $i ($name): t=$(sim.times[1])→$(sim.times[end]), E=$(sim.energies[end])")
+    end
+
+    out_path = replace(yaml_path, r"\.yaml$" => "_result.jld2")
+    save_experiment_result(out_path, result)
+    println("  Saved: $out_path\n")
 end
 
-for (i, (name, sim)) in enumerate(zip(result.phase_names, result.phase_results))
-    println("\nPhase $i: $name")
-    println("  Steps:     $(length(sim.times))")
-    println("  Time:      $(sim.times[1]) → $(sim.times[end])")
-    println("  Energy:    $(sim.energies[end])")
-    println("  Norm drift: $(abs(sim.norms[end] - sim.norms[1]))")
+path = length(ARGS) >= 1 ? ARGS[1] : joinpath(@__DIR__, "rb87_quench_dynamics.yaml")
+
+if isdir(path)
+    yamls = sort(filter(f -> endswith(f, ".yaml"), readdir(path; join=true)))
+    isempty(yamls) && error("No .yaml files found in $path")
+    println("Found $(length(yamls)) YAML files in $path\n")
+    for yaml in yamls
+        run_and_save(yaml)
+    end
+else
+    run_and_save(path)
 end

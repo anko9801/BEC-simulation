@@ -26,6 +26,58 @@ function save_state(filename::String, ws::Workspace)
     )
 end
 
+function save_experiment_result(filename::String, result::ExperimentResult)
+    cfg = result.config.system
+    data = Dict{String,Any}(
+        "experiment_name" => result.config.name,
+        "grid_n_points" => collect(cfg.grid_n_points),
+        "grid_box_size" => collect(cfg.grid_box_size),
+        "atom_name" => cfg.atom_name,
+        "ground_state_energy" => something(result.ground_state_energy, NaN),
+        "ground_state_converged" => something(result.ground_state_converged, false),
+        "n_phases" => length(result.phase_results),
+        "phase_names" => result.phase_names,
+    )
+
+    for (i, sim) in enumerate(result.phase_results)
+        pfx = "phase_$(i)_"
+        data[pfx * "times"] = sim.times
+        data[pfx * "energies"] = sim.energies
+        data[pfx * "norms"] = sim.norms
+        data[pfx * "magnetizations"] = sim.magnetizations
+        data[pfx * "psi_final"] = sim.psi_snapshots[end]
+    end
+
+    jldopen(filename, "w") do f
+        for (k, v) in data
+            f[k] = v
+        end
+    end
+end
+
+function load_experiment_result(filename::String)
+    data = load(filename)
+    n_phases = data["n_phases"]
+    phases = [(
+        name=data["phase_names"][i],
+        times=data["phase_$(i)_times"],
+        energies=data["phase_$(i)_energies"],
+        norms=data["phase_$(i)_norms"],
+        magnetizations=data["phase_$(i)_magnetizations"],
+        psi_final=data["phase_$(i)_psi_final"],
+    ) for i in 1:n_phases]
+
+    (
+        experiment_name=data["experiment_name"],
+        grid_n_points=Tuple(data["grid_n_points"]),
+        grid_box_size=Tuple(data["grid_box_size"]),
+        atom_name=data["atom_name"],
+        ground_state_energy=data["ground_state_energy"],
+        ground_state_converged=data["ground_state_converged"],
+        phases=phases,
+    )
+end
+
 function load_state(filename::String)
     data = load(filename)
     result = (

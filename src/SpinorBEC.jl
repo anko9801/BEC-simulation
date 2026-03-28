@@ -46,9 +46,9 @@ include("ground_state.jl")
 include("simulation.jl")
 include("adaptive.jl")
 include("yoshida.jl")
-include("io.jl")
 include("experiment.jl")
 include("experiment_runner.jl")
+include("io.jl")
 include("unitful_support.jl")
 
 # Types
@@ -140,7 +140,7 @@ export phase_diagram_point, component_populations, make_conservation_monitor
 export find_ground_state, run_simulation!, run_simulation_adaptive!, run_simulation_yoshida!, make_workspace, init_psi
 
 # I/O
-export save_state, load_state
+export save_state, load_state, save_experiment_result, load_experiment_result
 
 # Experiment
 export ConstantValue, LinearRamp, RampOrConstant, interpolate_value

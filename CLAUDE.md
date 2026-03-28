@@ -91,6 +91,8 @@ Instrumented with `@timeit_debug TIMER` on all sub-steps for profiling.
 - `make_workspace(; ...) → Workspace` then `run_simulation!(ws)` — real-time dynamics
 - `run_simulation_adaptive!(ws; adaptive, t_end, ...)` — adaptive dt with PI controller
 - `load_experiment("path.yaml") → ExperimentConfig` then `run_experiment(config)` — YAML-driven
+- `save_experiment_result(path, result)` / `load_experiment_result(path)` — JLD2 round-trip
+- `examples/run_experiment.jl` — batch runner: pass a directory to run all YAMLs
 
 ### Tracing / Profiling
 
