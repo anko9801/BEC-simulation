@@ -8,7 +8,7 @@ The c₂ term couples m and -m components via a Bogoliubov-type transformation:
 
 For each (m, -m) pair, the exact solution over dt is:
     ψ_m(t+dt)  = cos(|V|dt) ψ_m  - i(V/|V|) sin(|V|dt) ψ*_{-m}
-    ψ_{-m}(t+dt) = cos(|V|dt) ψ_{-m} + i(V/|V|) sin(|V|dt) ψ*_m
+    ψ_{-m}(t+dt) = cos(|V|dt) ψ_{-m} - i(V/|V|) sin(|V|dt) ψ*_m
 
 For ITP (exp(-Hτ)):
     ψ_m(τ)    = cosh(|V|τ) ψ_m    - (V/|V|) sinh(|V|τ) ψ*_{-m}
@@ -96,7 +96,7 @@ function _nematic_loop!(psi, ::Val{D}, n_pts, c2, dt, imaginary_time) where {D}
                         psi_m = psi[I, c]
                         psi_neg = psi[I, c_pair]
                         psi[I, c] = cosV * psi_m - im * phase * sinV * conj(psi_neg)
-                        psi[I, c_pair] = cosV * psi_neg + im * phase * sinV * conj(psi_m)
+                        psi[I, c_pair] = cosV * psi_neg - im * phase * sinV * conj(psi_m)
                     end
                 end
             end

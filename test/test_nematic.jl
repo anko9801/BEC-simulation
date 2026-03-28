@@ -135,24 +135,24 @@
         @test abs(N1 - N0) / N0 < 1e-12
     end
 
-    @testset "apply_nematic_step! per-pair norm with complex A₀₀ (F=1)" begin
+    @testset "apply_nematic_step! total norm with complex state (F=1)" begin
         psi = zeros(ComplexF64, 1, 3)
         psi[1, 1] = 0.5 * cis(0.7)
         psi[1, 2] = 0.3 + 0.2im
         psi[1, 3] = 0.4 * cis(-0.3)
         interactions = InteractionParams(10.0, -0.5, [50.0])
 
-        pair_norm_before = abs2(psi[1, 1]) + abs2(psi[1, 3])
+        total_before = sum(abs2, psi)
 
-        apply_nematic_step!(psi, interactions, 1, 0.05, 1)
+        for _ in 1:50
+            apply_nematic_step!(psi, interactions, 1, 0.01, 1)
+        end
 
-        pair_norm_after = abs2(psi[1, 1]) + abs2(psi[1, 3])
-
-        # (m=+1, m=-1) pair norm is exactly conserved by Bogoliubov transform
-        @test abs(pair_norm_after - pair_norm_before) < 1e-14
+        total_after = sum(abs2, psi)
+        @test total_after ≈ total_before rtol = 1e-6
     end
 
-    @testset "apply_nematic_step! per-pair norm with complex A₀₀ (F=2)" begin
+    @testset "apply_nematic_step! total norm with complex state (F=2)" begin
         psi = zeros(ComplexF64, 1, 5)
         psi[1, 1] = 0.4 * cis(0.5)    # m=+2
         psi[1, 2] = 0.3 * cis(-0.8)   # m=+1
@@ -161,16 +161,65 @@
         psi[1, 5] = 0.25 * cis(-0.3)  # m=-2
         interactions = InteractionParams(10.0, -0.5, [30.0])
 
-        pair1_before = abs2(psi[1, 1]) + abs2(psi[1, 5])  # (m=2, m=-2)
-        pair2_before = abs2(psi[1, 2]) + abs2(psi[1, 4])  # (m=1, m=-1)
+        total_before = sum(abs2, psi)
 
-        apply_nematic_step!(psi, interactions, 2, 0.05, 1)
+        for _ in 1:50
+            apply_nematic_step!(psi, interactions, 2, 0.01, 1)
+        end
 
-        pair1_after = abs2(psi[1, 1]) + abs2(psi[1, 5])
-        pair2_after = abs2(psi[1, 2]) + abs2(psi[1, 4])
+        total_after = sum(abs2, psi)
+        @test total_after ≈ total_before rtol = 1e-6
+    end
 
-        @test abs(pair1_after - pair1_before) < 1e-14
-        @test abs(pair2_after - pair2_before) < 1e-14
+    @testset "apply_nematic_step! RTP small-dt matches GP equation" begin
+        psi = zeros(ComplexF64, 1, 3)
+        psi[1, 1] = 0.5 * cis(0.7)    # m=+1
+        psi[1, 2] = 0.3 + 0.2im       # m=0
+        psi[1, 3] = 0.4 * cis(-0.3)   # m=-1
+        psi0 = copy(psi)
+        c2 = 50.0
+        interactions = InteractionParams(10.0, -0.5, [c2])
+        dt = 1e-6
+
+        apply_nematic_step!(psi, interactions, 1, dt, 1)
+
+        D = 3
+        inv_sqrt_D = 1.0 / sqrt(3.0)
+        signs = (1.0, -1.0, 1.0)  # (-1)^{1-m} for m=+1,0,-1
+        A00 = zero(ComplexF64)
+        for c in 1:3
+            c_pair = 4 - c
+            A00 += signs[c] * psi0[1, c] * psi0[1, c_pair]
+        end
+        A00 *= inv_sqrt_D
+
+        # GP equation: i∂ψ_m/∂t = c₂ (-1)^{F-m}/√D × A₀₀ × ψ*_{-m}
+        # → ψ_m(dt) ≈ ψ_m - i V_m dt ψ*_{-m}
+        for c in 1:3
+            c_pair = 4 - c
+            V = c2 * signs[c] * A00 * inv_sqrt_D
+            expected = psi0[1, c] - im * V * dt * conj(psi0[1, c_pair])
+            @test psi[1, c] ≈ expected rtol = 1e-4
+        end
+    end
+
+    @testset "apply_nematic_step! RTP symmetry (m ↔ -m same sign)" begin
+        psi = zeros(ComplexF64, 1, 3)
+        psi[1, 1] = 0.5 * cis(0.7)
+        psi[1, 2] = 0.3 + 0.2im
+        psi[1, 3] = 0.4 * cis(-0.3)
+        interactions = InteractionParams(10.0, -0.5, [50.0])
+
+        psi_swapped = zeros(ComplexF64, 1, 3)
+        psi_swapped[1, 1] = psi[1, 3]
+        psi_swapped[1, 2] = psi[1, 2]
+        psi_swapped[1, 3] = psi[1, 1]
+
+        apply_nematic_step!(psi, interactions, 1, 0.05, 1)
+        apply_nematic_step!(psi_swapped, interactions, 1, 0.05, 1)
+
+        @test psi[1, 1] ≈ psi_swapped[1, 3] atol = 1e-14
+        @test psi[1, 3] ≈ psi_swapped[1, 1] atol = 1e-14
     end
 
     @testset "apply_nematic_step! ITP norm decrease" begin
