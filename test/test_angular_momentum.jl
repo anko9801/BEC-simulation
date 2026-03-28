@@ -171,6 +171,51 @@ using LinearAlgebra
         @test abs(Jz_final - Jz0) < 0.05
     end
 
+    @testset "J_z conservation with DDI (2D, F=6)" begin
+        N = 16
+        L = 16.0
+        grid = make_grid(GridConfig((N, N), (L, L)))
+        plans = make_fft_plans(grid.config.n_points)
+        sys = SpinSystem(6)
+        dV = cell_volume(grid)
+
+        atom = AtomSpecies("test-f6", 1.0, 6, 0.0, 0.0)
+        c_dd = 100.0
+        ip = interaction_params_from_constraint(; c_total=200.0, c1_ratio=1.0 / 36.0, F=6)
+
+        # Vortex in m=+6: L_z ≈ 1, S_z ≈ 6, J_z ≈ 7
+        psi0 = zeros(ComplexF64, N, N, 13)
+        sigma = L / 6
+        for j in 1:N, i in 1:N
+            x, y = grid.x[1][i], grid.x[2][j]
+            r = sqrt(x^2 + y^2)
+            phi = atan(y, x)
+            core = r / (r + 0.5)
+            env = exp(-(r / sigma)^2)
+            psi0[i, j, 1] = core * env * exp(im * phi)
+        end
+        psi0 ./= sqrt(sum(abs2, psi0) * dV)
+
+        n_steps = 200
+        sp = SimParams(; dt=2e-4, n_steps, imaginary_time=false, save_every=n_steps)
+        ws = make_workspace(;
+            grid, atom, interactions=ip, sim_params=sp, psi_init=psi0,
+            potential=HarmonicTrap(1.0, 1.0),
+            zeeman=ZeemanParams(0.1, 0.0),
+            enable_ddi=true, c_dd,
+        )
+
+        Jz0 = total_angular_momentum(ws.state.psi, grid, plans, sys)
+        @test Jz0 > 6.0  # S_z ≈ 6 + L_z ≈ 1
+
+        for _ in 1:n_steps
+            split_step!(ws)
+        end
+
+        Jz_final = total_angular_momentum(ws.state.psi, grid, plans, sys)
+        @test abs(Jz_final - Jz0) < 0.15
+    end
+
     @testset "probability_current: 2D components" begin
         grid = make_grid(GridConfig((32, 32), (10.0, 10.0)))
         sys = SpinSystem(1)
