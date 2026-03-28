@@ -177,4 +177,42 @@ using LinearAlgebra
         @test n_m1 / n_total > 0.95
     end
 
+    @testset "F=6 Eu-like: norm and magnetization conservation with DDI (1D)" begin
+        gc = GridConfig((32,), (20.0,))
+        grid = make_grid(gc)
+        sys = SpinSystem(6)
+
+        atom = AtomSpecies("test-f6", 1.0, 6, 0.0, 0.0)
+        c_dd = 100.0
+        c_total = 200.0
+        ip = interaction_params_from_constraint(; c_total, c1_ratio=1.0 / 36.0, F=6)
+
+        psi0 = init_psi(grid, sys; state=:ferromagnetic)
+
+        n_steps = 200
+        sp = SimParams(; dt=1e-4, n_steps, imaginary_time=false, save_every=50)
+        ws = make_workspace(;
+            grid, atom,
+            interactions=ip,
+            zeeman=ZeemanParams(0.1, 0.0),
+            potential=HarmonicTrap(1.0),
+            sim_params=sp,
+            psi_init=psi0,
+            enable_ddi=true, c_dd,
+        )
+
+        N0 = total_norm(ws.state.psi, grid)
+        M0 = magnetization(ws.state.psi, grid, sys)
+
+        for s in 1:n_steps
+            split_step!(ws)
+            if s % sp.save_every == 0
+                N_cur = total_norm(ws.state.psi, grid)
+                M_cur = magnetization(ws.state.psi, grid, sys)
+                @test abs(N_cur - N0) / N0 < 1e-6
+                @test abs(M_cur - M0) < 1e-4
+            end
+        end
+    end
+
 end
