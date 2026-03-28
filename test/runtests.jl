@@ -37,4 +37,5 @@ using SpinorBEC
     include("test_general_f.jl")
     include("test_tensor_interaction.jl")
     include("test_interactions_constraint.jl")
+    include("test_io.jl")
 end
