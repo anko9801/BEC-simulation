@@ -63,9 +63,12 @@
         @test params.c1 == 0.0
     end
 
-    @testset "F>1 without scattering_lengths throws" begin
+    @testset "F>1 without scattering_lengths falls back to c0-only" begin
         atom_bare = AtomSpecies("bare", 1.0, 3, 0.1, 0.0)
-        @test_throws ArgumentError compute_interaction_params(atom_bare; N_atoms=1, dims=3)
+        ip = @test_logs (:warn, r"No channel scattering lengths") compute_interaction_params(
+            atom_bare; N_atoms=1, dims=3)
+        @test ip.c0 > 0
+        @test ip.c1 == 0.0
     end
 
     @testset "TensorInteractionCache from scattering_lengths" begin

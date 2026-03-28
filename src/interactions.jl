@@ -34,8 +34,11 @@ function compute_interaction_params(atom::AtomSpecies; N_atoms::Int=1, dims::Int
         return InteractionParams(c0, c1)
     end
 
-    isempty(atom.scattering_lengths) && throw(ArgumentError(
-        "F=$(atom.F) requires scattering_lengths dict in AtomSpecies"))
+    if isempty(atom.scattering_lengths)
+        @warn "No channel scattering lengths for F=$(atom.F) atom $(atom.name); using c0-only (c1=0)" maxlog=1
+        c0 = compute_c0(atom; N_atoms, dims, length_scale)
+        return InteractionParams(c0, 0.0)
+    end
     compute_interaction_params_general_f(atom; N_atoms, dims, length_scale)
 end
 
@@ -122,11 +125,12 @@ end
 """
     _c_extra_to_delta_gS(F, c_extra) → Dict{Int,Float64}
 
-Convert higher-rank tensor couplings c_k (k=2,4,...) to channel coupling
-perturbations δg_S via 6j transform.
+Convert higher-rank tensor couplings c_k to channel coupling perturbations δg_S
+via 6j transform.
 
-Only processes rank k ≥ 2 entries from c_extra (c_extra[idx] corresponds to
-c_{idx+1}, so c_extra[1]=c₂, c_extra[3]=c₄, etc.).
+Processes even-rank entries k ∈ {2, 4, ..., 2F} from `c_extra`, where
+`c_extra[idx]` = c_{idx+1} (i.e. c_extra[1]=c₂, c_extra[3]=c₄, c_extra[5]=c₆).
+Odd-rank and zero entries are skipped.
 """
 function _c_extra_to_delta_gS(F::Int, c_extra::Vector{Float64})
     c_dict = Dict{Int,Float64}()
@@ -151,9 +155,16 @@ by ratio r = c₁/c₀:
   c₀ = c_total / (1 + F²r)
   c₁ = r × c₀
 
-The optional `c_extra` vector provides higher-rank tensor couplings (c₂, c₃, ...)
-which are stored in InteractionParams and used to build a TensorInteractionCache
-when higher even-rank channels (k ≥ 4) are present.
+The optional `c_extra` vector provides higher-rank tensor couplings where
+`c_extra[n-1]` = cₙ (same indexing as `InteractionParams`). When any even-rank
+entry with k ≥ 4 is nonzero, `make_workspace` activates the tensor interaction
+path and zeros c₀/c₁.
+
+Example with c₄ = 50:
+
+    ip = interaction_params_from_constraint(;
+        c_total=4689.0, c1_ratio=1/36, F=6,
+        c_extra=[0.0, 0.0, 50.0])  # c_extra[3] = c₄
 
 Note: r = -1/F² is singular (c₀ → ∞). For F=6, avoid r ≤ -1/36.
 """

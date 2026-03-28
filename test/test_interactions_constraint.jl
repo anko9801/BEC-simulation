@@ -99,6 +99,14 @@
         @test ip.c1 ≈ 0.0
     end
 
+    @testset "compute_interaction_params fallback for missing scattering lengths" begin
+        ip = @test_logs (:warn, r"No channel scattering lengths") compute_interaction_params(
+            Eu151; N_atoms=1, dims=3)
+        @test ip.c0 > 0
+        @test ip.c1 == 0.0
+        @test ip.c0 ≈ compute_c0(Eu151; N_atoms=1, dims=3)
+    end
+
     @testset "_c0c1_to_gS analytic F=1" begin
         c0, c1 = 100.0, -5.0
         g = SpinorBEC._c0c1_to_gS(1, c0, c1)
