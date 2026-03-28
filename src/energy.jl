@@ -1,7 +1,7 @@
 """
 Total energy (approximate, using current wavefunction).
 
-E = E_kin + E_trap + E_Zeeman + E_int(c0) + E_int(c1)
+E = E_kin + E_trap + E_Zeeman + E_int(c0) + E_int(c1) + E_ddi + E_LHY + E_tensor + E_Raman
 """
 function total_energy(ws::Workspace{N}) where {N}
     psi = ws.state.psi
@@ -44,7 +44,13 @@ function total_energy(ws::Workspace{N}) where {N}
         c2 != 0.0 ? _nematic_energy(psi, ws.spin_matrices.system.F, c2, N, n_pts, dV) : 0.0
     end
 
-    E_kin + E_trap + E_zee + E_c0 + E_c1 + E_ddi + E_lhy + E_tensor
+    E_raman = if ws.raman !== nothing
+        _raman_energy(psi, ws.spin_matrices, ws.raman, grid, N, n_pts, dV)
+    else
+        0.0
+    end
+
+    E_kin + E_trap + E_zee + E_c0 + E_c1 + E_ddi + E_lhy + E_tensor + E_raman
 end
 
 function _kinetic_energy(psi, grid, plans, fft_buf, n_comp, ndim, n_pts, dV)
@@ -112,4 +118,18 @@ function _ddi_energy(psi, sm::SpinMatrices{D}, ddi, ddi_bufs, n_comp, ndim, n_pt
              ddi_bufs.Phi_z[I] * ddi_bufs.Fz_r[I]
     end
     0.5 * E * dV
+end
+
+function _raman_energy(psi, sm::SpinMatrices{D}, raman::RamanCoupling{N},
+                       grid::Grid{N}, ndim, n_pts, dV) where {D,N}
+    E = 0.0
+    @inbounds for I in CartesianIndices(n_pts)
+        kr = sum(ntuple(d -> raman.k_eff[d] * grid.x[d][I[d]], Val(N)))
+        phase = exp(1im * kr)
+        H_R = raman.delta * sm.Fz +
+              (raman.Omega_R / 2) * (phase * sm.Fp + conj(phase) * sm.Fm)
+        spinor = _get_spinor(psi, I, Val(D))
+        E += real(dot(spinor, SMatrix{D,D,ComplexF64}(H_R) * spinor)) * dV
+    end
+    E
 end

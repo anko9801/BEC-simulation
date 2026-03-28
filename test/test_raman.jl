@@ -117,4 +117,25 @@ using LinearAlgebra
         @test norm ≈ 1.0 rtol = 0.01
     end
 
+    @testset "Raman energy in total_energy" begin
+        grid = make_grid(GridConfig(32, 10.0))
+        sys = SpinSystem(1)
+        atom = Rb87
+        interactions = compute_interaction_params(atom)
+        sp = SimParams(; dt=0.001, n_steps=1)
+        rc = RamanCoupling{1}(2.0, 0.5, (1.0,))
+
+        psi_uniform = init_psi(grid, sys; state=:uniform)
+        ws = make_workspace(; grid, atom, interactions, sim_params=sp, raman=rc,
+                             psi_init=psi_uniform)
+        E = total_energy(ws)
+        @test isfinite(E)
+
+        ws_no = make_workspace(; grid, atom, interactions, sim_params=sp,
+                                psi_init=copy(psi_uniform))
+        E_no = total_energy(ws_no)
+        @test isfinite(E_no)
+        @test E != E_no
+    end
+
 end
