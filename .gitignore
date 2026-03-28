@@ -34,3 +34,5 @@ JuliaLocalPreferences.toml
 # Allow Pages assets
 !examples/eu151/density_64.html
 !examples/eu151/density_64.json
+!examples/eu151/edh_full_64.html
+!examples/eu151/edh_full_64.json
