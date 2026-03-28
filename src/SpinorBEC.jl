@@ -45,6 +45,7 @@ include("spherical_harmonics.jl")
 include("simulation_utils.jl")
 include("initialization.jl")
 include("ground_state.jl")
+include("phase_boundary.jl")
 include("simulation.jl")
 include("adaptive.jl")
 include("yoshida.jl")
@@ -147,6 +148,7 @@ export power_spectrum
 
 # Simulation
 export find_ground_state, find_ground_state_multistart, scan_continuation
+export find_phase_boundary
 export run_simulation!, run_simulation_checkpointed!
 export run_simulation_adaptive!, run_simulation_yoshida!, make_workspace, init_psi
 
