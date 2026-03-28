@@ -44,6 +44,25 @@ using LinearAlgebra
         @test Mz_after ≈ Mz_before atol = 1e-12
     end
 
+    @testset "Euler rotation identity for tiny phi_mag" begin
+        using StaticArrays
+        F = 2
+        D = 2F + 1
+        sm = spin_matrices(F)
+        m_vals = SVector{D,Float64}(ntuple(c -> F - (c - 1), Val(D)))
+
+        spinor = SVector{D,ComplexF64}(ntuple(c -> complex(Float64(c), Float64(c) * 0.5), Val(D)))
+        spinor_norm = spinor / sqrt(sum(abs2, spinor))
+
+        result = SpinorBEC._apply_euler_spin_rotation(
+            spinor_norm, 1e-14, 0.0, 0.0,
+            1.0, F, m_vals,
+            sm.Fy_eigvecs, sm.Fy_eigvecs_adj, sm.Fy_eigvals,
+            sm, false,
+        )
+        @test result ≈ spinor_norm atol=1e-14
+    end
+
     @testset "c1=0 is identity" begin
         config = GridConfig(32, 10.0)
         grid = make_grid(config)
