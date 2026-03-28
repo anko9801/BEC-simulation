@@ -1,18 +1,60 @@
-function init_psi(grid::Grid{N}, sys::SpinSystem; state::Symbol=:polar) where {N}
+function init_psi(grid::Grid{N}, sys::SpinSystem;
+                  state::Symbol=:polar, seed::Int=42,
+                  helix_k::NTuple{N,Float64}=ntuple(_ -> 0.0, N)) where {N}
     n_pts = grid.config.n_points
     psi = zeros(ComplexF64, n_pts..., sys.n_components)
+    F = sys.F
+    D = sys.n_components
 
     sigma = ntuple(d -> grid.config.box_size[d] / 8, N)
     gauss = _gaussian(grid, sigma)
 
     if state == :polar
-        mid = (sys.n_components + 1) ÷ 2
+        mid = (D + 1) ÷ 2
         _set_component!(psi, gauss, N, n_pts, mid)
     elseif state == :ferromagnetic
         _set_component!(psi, gauss, N, n_pts, 1)
     elseif state == :uniform
-        for c in 1:sys.n_components
-            _set_component!(psi, gauss / sqrt(sys.n_components), N, n_pts, c)
+        for c in 1:D
+            _set_component!(psi, gauss / sqrt(D), N, n_pts, c)
+        end
+    elseif state == :antiferromagnetic
+        for c in 1:D
+            m = F - (c - 1)
+            sign = iseven(F - m) ? 1.0 : -1.0
+            _set_component!(psi, sign * gauss / sqrt(D), N, n_pts, c)
+        end
+    elseif state == :random
+        rng = Random.MersenneTwister(seed)
+        psi .= randn(rng, ComplexF64, size(psi))
+        @inbounds for I in CartesianIndices(n_pts)
+            for c in 1:D
+                psi[I, c] *= gauss[I]
+            end
+        end
+    elseif state == :spin_helix
+        sm = spin_matrices(F)
+        @inbounds for I in CartesianIndices(n_pts)
+            theta = sum(ntuple(d -> helix_k[d] * grid.x[d][I[d]], Val(N)))
+            ct = cos(theta)
+            st = sin(theta)
+            for c in 1:D
+                m = F - (c - 1)
+                if c == 1
+                    psi[I, c] = gauss[I] * complex(ct, st)^F
+                else
+                    psi[I, c] = zero(ComplexF64)
+                end
+            end
+            spinor = Vector{ComplexF64}(undef, D)
+            for c in 1:D
+                spinor[c] = psi[I, c]
+            end
+            rot = exp(-1im * theta * Matrix(sm.Fy))
+            rotated = rot * [c == 1 ? complex(gauss[I]) : zero(ComplexF64) for c in 1:D]
+            for c in 1:D
+                psi[I, c] = rotated[c]
+            end
         end
     else
         throw(ArgumentError("Unknown initial state: $state"))
