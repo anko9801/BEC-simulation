@@ -52,6 +52,7 @@ function find_ground_state(;
     adaptive_dt::Bool=false,
     dt_max::Float64=10.0 * dt,
     fft_flags=FFTW.MEASURE,
+    target_magnetization::Union{Nothing,Float64}=nothing,
 )
     psi0 = if psi_init === nothing
         sys = SpinSystem(atom.F)
@@ -70,26 +71,51 @@ function find_ground_state(;
         )
     end
 
-    sp = SimParams(; dt, n_steps, imaginary_time=true, normalize_every=1, save_every=max(1, n_steps ÷ 10))
-    ws = make_workspace(; grid, atom, interactions, zeeman, potential, sim_params=sp, psi_init=psi0, enable_ddi, c_dd, secular_ddi, fft_flags)
+    use_constrained = target_magnetization !== nothing
+    norm_every = use_constrained ? 0 : 1
+    sp = SimParams(; dt, n_steps, imaginary_time=true, normalize_every=norm_every,
+                   save_every=max(1, n_steps ÷ 10))
+    ws = make_workspace(; grid, atom, interactions, zeeman, potential, sim_params=sp,
+                        psi_init=psi0, enable_ddi, c_dd, secular_ddi, fft_flags)
+
+    n_comp = ws.spin_matrices.system.n_components
+    N_dim = length(grid.config.n_points)
+
+    if use_constrained
+        _normalize_psi_constrained!(ws.state.psi, ws.grid, n_comp, N_dim,
+                                    target_magnetization, atom.F)
+    end
 
     E_prev = total_energy(ws)
     converged = false
+    psi_prev = copy(ws.state.psi)
+    final_dE = NaN
+    final_dpsi = NaN
 
     for step in 1:n_steps
         split_step!(ws)
+        if use_constrained
+            _normalize_psi_constrained!(ws.state.psi, ws.grid, n_comp, N_dim,
+                                        target_magnetization, atom.F)
+        end
         if step % sp.save_every == 0
             E = total_energy(ws)
             dE = abs(E - E_prev)
-            if dE < tol
+            psi_max = maximum(abs, ws.state.psi)
+            dpsi = psi_max > 0 ? maximum(abs, ws.state.psi .- psi_prev) / psi_max : 0.0
+            final_dE = dE
+            final_dpsi = dpsi
+            if dE < tol && dpsi < tol
                 converged = true
                 break
             end
             E_prev = E
+            copyto!(psi_prev, ws.state.psi)
         end
     end
 
-    (workspace=ws, converged=converged, energy=total_energy(ws))
+    (workspace=ws, converged=converged, energy=total_energy(ws),
+     dE=final_dE, dpsi=final_dpsi)
 end
 
 """
@@ -116,6 +142,9 @@ function _find_ground_state_adaptive(;
     converged = false
     total_steps = 0
 
+    final_dE = NaN
+    final_dpsi = NaN
+
     while total_steps < n_steps
         copyto!(psi_backup, ws.state.psi)
 
@@ -132,7 +161,11 @@ function _find_ground_state_adaptive(;
             ws = _rebuild_workspace_with_dt(ws, current_dt)
         else
             dE = abs(E - E_prev)
-            if dE < tol
+            psi_max = maximum(abs, ws.state.psi)
+            dpsi = psi_max > 0 ? maximum(abs, ws.state.psi .- psi_backup) / psi_max : 0.0
+            final_dE = dE
+            final_dpsi = dpsi
+            if dE < tol && dpsi < tol
                 converged = true
                 break
             end
@@ -145,7 +178,100 @@ function _find_ground_state_adaptive(;
         end
     end
 
-    (workspace=ws, converged=converged, energy=total_energy(ws))
+    (workspace=ws, converged=converged, energy=total_energy(ws),
+     dE=final_dE, dpsi=final_dpsi)
+end
+
+"""
+    find_ground_state_multistart(; initial_states, n_random, seed, kwargs...) → NamedTuple
+
+Try multiple initial states and return the lowest-energy ground state.
+All keyword arguments except `initial_states`, `n_random`, and `seed` are
+forwarded to `find_ground_state`.
+
+Returns `(workspace, converged, energy, initial_state, all_results)`.
+"""
+function find_ground_state_multistart(;
+    initial_states::Vector{Symbol}=[:polar, :ferromagnetic, :uniform, :antiferromagnetic],
+    n_random::Int=3,
+    seed::Int=42,
+    grid,
+    atom,
+    interactions,
+    kwargs...,
+)
+    results = NamedTuple[]
+
+    for state in initial_states
+        if state == :random
+            for i in 1:n_random
+                sys = SpinSystem(atom.F)
+                psi0 = init_psi(grid, sys; state=:random, seed=seed + i)
+                r = find_ground_state(; grid, atom, interactions, psi_init=psi0, kwargs...)
+                push!(results, (initial_state=:random, idx=i, workspace=r.workspace,
+                                converged=r.converged, energy=r.energy,
+                                dE=r.dE, dpsi=r.dpsi))
+            end
+        else
+            r = find_ground_state(; grid, atom, interactions, initial_state=state, kwargs...)
+            push!(results, (initial_state=state, idx=0, workspace=r.workspace,
+                            converged=r.converged, energy=r.energy,
+                            dE=r.dE, dpsi=r.dpsi))
+        end
+    end
+
+    best = argmin(r -> r.energy, results)
+    (workspace=best.workspace, converged=best.converged, energy=best.energy,
+     initial_state=best.initial_state, all_results=results)
+end
+
+"""
+Normalize psi while constraining magnetization ⟨Fz⟩ to target_Mz.
+
+Applies exp(λ·m) weights to each component, then normalizes.
+Uses Newton iteration to find λ such that Mz(λ) = target_Mz.
+"""
+function _normalize_psi_constrained!(psi, grid, n_components, ndim, target_Mz, F)
+    dV = cell_volume(grid)
+    n_pts = ntuple(d -> size(psi, d), ndim)
+
+    _normalize_psi!(psi, grid, n_components, ndim)
+
+    lambda = 0.0
+    for _iter in 1:20
+        norms = Vector{Float64}(undef, n_components)
+        for c in 1:n_components
+            m = F - (c - 1)
+            idx = _component_slice(ndim, n_pts, c)
+            w = exp(lambda * m)
+            norms[c] = sum(abs2, view(psi, idx...)) * dV * w^2
+        end
+        total = sum(norms)
+        total < 1e-30 && break
+
+        Mz = sum((F - (c - 1)) * norms[c] for c in 1:n_components) / total
+        abs(Mz - target_Mz) < 1e-12 && break
+
+        dMz = 0.0
+        for c in 1:n_components
+            m = F - (c - 1)
+            dMz += 2 * m * (m * norms[c] / total - Mz * m * norms[c] / total)
+        end
+        abs(dMz) < 1e-30 && break
+
+        lambda -= (Mz - target_Mz) / dMz
+        lambda = clamp(lambda, -10.0, 10.0)
+    end
+
+    for c in 1:n_components
+        m = F - (c - 1)
+        w = exp(lambda * m)
+        idx = _component_slice(ndim, n_pts, c)
+        view(psi, idx...) .*= w
+    end
+
+    _normalize_psi!(psi, grid, n_components, ndim)
+    nothing
 end
 
 function _rebuild_workspace_with_dt(ws::Workspace{N}, new_dt::Float64) where {N}
