@@ -143,6 +143,7 @@ export healing_length_contact, healing_length_spin, healing_length_ddi
 export thomas_fermi_radius, thomas_fermi_radius_harmonic
 export phase_diagram_point, component_populations, make_conservation_monitor
 export classify_phase, estimate_splitting_error, validate_conservation
+export power_spectrum
 
 # Simulation
 export find_ground_state, find_ground_state_multistart

@@ -293,6 +293,59 @@ function validate_conservation(ws::Workspace{N}; n_steps::Int=100,
      magnetization_drift=mag_drift)
 end
 
+"""
+    power_spectrum(times, signal; window=:hanning, pad_factor=1) → NamedTuple
+
+Compute power spectrum of a uniformly-sampled signal.
+Returns `(frequencies, power)` using rfft. Applies windowing to reduce spectral leakage.
+"""
+function power_spectrum(times::Vector{Float64}, signal::Vector{Float64};
+                        window::Symbol=:hanning, pad_factor::Int=1)
+    N_sig = length(times)
+    length(signal) == N_sig || throw(DimensionMismatch("times and signal must have same length"))
+    N_sig >= 2 || throw(ArgumentError("need at least 2 samples"))
+    pad_factor >= 1 || throw(ArgumentError("pad_factor must be >= 1"))
+
+    dt = times[2] - times[1]
+    dt > 0 || throw(ArgumentError("times must be increasing"))
+
+    max_dt_var = maximum(abs(times[i+1] - times[i] - dt) for i in 1:N_sig-1)
+    max_dt_var / dt < 1e-6 || throw(ArgumentError(
+        "times must be uniformly spaced (max variation = $(max_dt_var))"))
+
+    w = if window === :hanning
+        _hanning_window(N_sig)
+    elseif window === :hamming
+        _hamming_window(N_sig)
+    elseif window === :none
+        ones(Float64, N_sig)
+    else
+        throw(ArgumentError("Unknown window: $window. Use :hanning, :hamming, or :none"))
+    end
+
+    windowed = signal .* w
+    w_norm = sqrt(sum(abs2, w) / N_sig)
+
+    n_pad = N_sig * pad_factor
+    padded = zeros(Float64, n_pad)
+    padded[1:N_sig] .= windowed
+
+    spectrum = FFTW.rfft(padded)
+    power = abs2.(spectrum) ./ (w_norm^2 * N_sig^2)
+
+    freqs = FFTW.rfftfreq(n_pad, 1.0 / dt)
+
+    (frequencies=collect(freqs), power=collect(power))
+end
+
+function _hanning_window(N::Int)
+    [0.5 * (1 - cos(2π * i / (N - 1))) for i in 0:N-1]
+end
+
+function _hamming_window(N::Int)
+    [0.54 - 0.46 * cos(2π * i / (N - 1)) for i in 0:N-1]
+end
+
 function component_populations(psi::AbstractArray{ComplexF64}, grid::Grid{N},
                                 sys::SpinSystem) where {N}
     dV = cell_volume(grid)
