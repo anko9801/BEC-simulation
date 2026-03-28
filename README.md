@@ -6,7 +6,8 @@ A Julia package for simulating spin-$F$ Bose-Einstein condensates by solving the
 
 - **Arbitrary spin $F$**: spin matrices built from angular momentum algebra (`StaticArrays` for stack allocation)
 - **N-dimensional**: unified code path for 1D / 2D / 3D via `CartesianIndices`
-- **Split-step Fourier**: 2nd-order Strang splitting with nested substeps (potential, spin mixing, DDI, Raman)
+- **Split-step Fourier**: 2nd-order Strang splitting with nested symmetric substeps (potential, spin mixing, DDI, Raman)
+- **General-$F$ tensor interactions**: Clebsch-Gordan based mean-field for all scattering channels ($S = 0, 2, \ldots, 2F$), with 6j symbol transform from rank-$k$ tensor couplings
 - **Ground state search**: imaginary-time propagation with convergence criterion
 - **Real-time dynamics**: multi-phase sequences, time-dependent Zeeman ramps, leapfrog fusion, adaptive $\Delta t$
 - **Potentials**: harmonic trap, gravity, crossed dipole trap (Gaussian beams), laser beam potential, composites
@@ -117,29 +118,38 @@ $$H = \sum_m \int \psi_m^{*} \left[ -\frac{\hbar^2 \nabla^2}{2M} + V(\mathbf{r})
 | $c_1 \langle\mathbf{F}\rangle \cdot \mathbf{F}$ | Spin-dependent contact interaction | Matrix exponential at each grid point |
 | $H_{\mathrm{ddi}}$ | Long-range anisotropic dipolar interaction | $k$-space convolution: $Q_{\alpha\beta}(\mathbf{k}) = \hat{k}_\alpha \hat{k}_\beta - \delta_{\alpha\beta}/3$ |
 | $c_2 \|A_{00}\|^2$ | Nematic (singlet pair) interaction | $A_{00} = \sum_m (-1)^{F-m} \psi_m \psi_{-m} / \sqrt{2F+1}$ |
+| $\sum_S g_S \|A_{SM}\|^2$ | General-$F$ tensor interaction (all channels) | CG-based mean-field $h_{mm'}$, applied via eigendecomposition |
 | $c_{\mathrm{LHY}} n^{5/2}$ | Lee-Huang-Yang beyond-mean-field correction | $V_{\mathrm{LHY}} = c_{\mathrm{LHY}} n \sqrt{n}$ in diagonal step |
 | $H_{\mathrm{Raman}}$ | Two-photon Raman transition | Spatially dependent matrix exponential: $(\Omega_R/2)(e^{i\mathbf{k}\cdot\mathbf{r}} F_+ + \text{h.c.}) + \delta F_z$ |
 
 ### Interaction Parameters
 
-For spin-1 BECs, the interaction strengths are determined by $s$-wave scattering lengths $a_0$ and $a_2$ (total spin $F_{\mathrm{tot}} = 0, 2$ channels):
+**Spin-1** ($F=1$): interaction strengths from $s$-wave scattering lengths $a_0$ and $a_2$ (total spin $F_{\mathrm{tot}} = 0, 2$ channels):
 
 $$c_0 = \frac{4\pi\hbar^2 (a_0 + 2a_2)}{3M}, \qquad c_1 = \frac{4\pi\hbar^2 (a_2 - a_0)}{3M}$$
 
-- $c_1 < 0$: ferromagnetic (${}^{87}$Rb)
-- $c_1 > 0$: antiferromagnetic (${}^{23}$Na)
+- $c_1 < 0$: ferromagnetic ($^{87}\mathrm{Rb}$)
+- $c_1 > 0$: antiferromagnetic ($^{23}\mathrm{Na}$)
 
-For quasi-low-dimensional systems (1D, 2D), transverse confinement provides dimensional reduction. The DDI coupling constant is $C_{\mathrm{dd}} = \mu_0 \mu^2 / (4\pi)$.
+**General $F$**: channel couplings $g_S$ for each total pair-spin $S = 0, 2, \ldots, 2F$:
+
+$$g_S = c_0 + c_1 \frac{S(S+1) - 2F(F+1)}{2}$$
+
+Higher-rank tensor couplings $c_k$ ($k = 4, 6, \ldots, 2F$) are converted to $g_S$ via 6j symbols. When a `TensorInteractionCache` is active, it handles all contact interactions and replaces the separate $c_0$/$c_1$/nematic steps.
+
+**Constraint-based parameterization** (for atoms like $^{151}\mathrm{Eu}$ where individual $a_S$ are unknown): `interaction_params_from_constraint(; c_total, c1_ratio, F, c_extra)` constructs $c_0, c_1$ from the physical constraint $c_0 + F^2 c_1 = c_{\mathrm{total}}$, with optional higher-rank $c_k$ via `c_extra`.
+
+For quasi-low-dimensional systems (1D, 2D), transverse confinement provides dimensional reduction. The DDI coupling constant is $C_{\mathrm{dd}} = \mu_0 \mu^2$.
 
 ### Supported Atom Species
 
-| Atom | Spin $F$ | Scattering lengths | Magnetic moment | Character |
-|------|----------|-------------------|-----------------|-----------|
-| ${}^{87}$Rb | 1 | $a_0 = 101.8\,a_B$, $a_2 = 100.4\,a_B$ | — | Ferromagnetic ($c_1 < 0$) |
-| ${}^{23}$Na | 1 | $a_0 = 50.0\,a_B$, $a_2 = 55.0\,a_B$ | — | Antiferromagnetic ($c_1 > 0$) |
-| ${}^{151}$Eu | 6 | $a_s = 110.0\,a_B$ | $7\,\mu_B$ | Dipolar ($\varepsilon_{\mathrm{dd}} \approx 0.55$) |
+| Atom | Spin $F$ | $g_F$ | Scattering lengths | Magnetic moment | Character |
+|------|----------|-------|-------------------|-----------------|-----------|
+| $^{87}\mathrm{Rb}$ | 1 | $-1/2$ | $a_0 = 101.8\,a_B$, $a_2 = 100.4\,a_B$ | — | Ferromagnetic ($c_1 < 0$) |
+| $^{23}\mathrm{Na}$ | 1 | $-1/2$ | $a_0 = 50.0\,a_B$, $a_2 = 55.0\,a_B$ | — | Antiferromagnetic ($c_1 > 0$) |
+| $^{151}\mathrm{Eu}$ | 6 | $7/6$ | $a_s = 110.0\,a_B$ (channels unknown) | $7\,\mu_B$ | Dipolar ($\varepsilon_{\mathrm{dd}} \approx 0.55$) |
 
-Spin matrices for arbitrary $F$ are constructed from angular momentum algebra.
+Spin matrices for arbitrary $F$ are constructed from angular momentum algebra. The Landé $g_F$ factor is used for computing the linear Zeeman shift: `linear_zeeman_p(atom, B, omega_ref)`.
 
 ## Numerical Methods
 
@@ -164,13 +174,19 @@ Each time step $S_2(\Delta t)$ consists of:
 
 All non-commuting operators within the potential step are symmetrized for 2nd-order accuracy. DDI is innermost (most expensive: 6 FFTs). Each substep is skipped when its coupling constant is negligible (e.g., spin mixing when $c_1 \approx 0$, nematic when $c_2 = 0$).
 
+When a `TensorInteractionCache` is active, the **tensor interaction step replaces both spin mixing and nematic** in the inner splitting to avoid double-counting. The tensor step builds the Hermitian mean-field matrix $h_{mm'}$ from all active scattering channels and applies $\exp(-ih\,dt)$ via eigendecomposition at each grid point, using thread-local pre-allocated buffers.
+
 **Spin mixing** (`spin_mixing.jl`): $D=3$: Rodrigues' formula (machine-precision unitarity). $D>3$: Euler angle decomposition — $O(D)$ spin expectation via raising/lowering operators and $O(D^2)$ rotation via cached $F_y$ eigendecomposition.
 
-**Nematic** (`nematic.jl`): Bogoliubov-type coupling of $(m, -m)$ pairs via singlet pair amplitude $A_{00}$, conserving $|\psi_m|^2 + |\psi_{-m}|^2$ per pair.
+**Nematic** (`nematic.jl`): Bogoliubov-type coupling of $(m, -m)$ pairs via singlet pair amplitude $A_{00}$, conserving total norm.
 
-**DDI** (`ddi.jl` + `ddi_padded.jl`): $k$-space convolution with $Q_{\alpha\beta}(\mathbf{k}) = \hat{k}_\alpha \hat{k}_\beta - \delta_{\alpha\beta}/3$, applied via Euler angle spin rotation. Optional zero-padded convolution (2$\times$ grid in each dim) for reduced aliasing.
+**Tensor** (`tensor_interaction.jl`): General-$F$ contact interaction for all channels $S = 0, 2, \ldots, 2F$. Per grid point: $h_{mm'} = \sum_S g_S \sum_\mu \langle m,\mu|S,M\rangle\langle m',\nu|S,M\rangle\, \psi_\mu^* \psi_\nu$, then $\psi \to e^{-ih\,dt}\psi$.
+
+**DDI** (`ddi.jl` + `ddi_padded.jl`): $k$-space convolution with $Q_{\alpha\beta}(\mathbf{k}) = \hat{k}_\alpha \hat{k}_\beta - \delta_{\alpha\beta}/3$, applied via Euler angle spin rotation. Optional zero-padded convolution (2× grid in each dim) for reduced aliasing. Secular approximation available (`secular=true`) for $\omega_L \gg c_{\mathrm{dd}} n$.
 
 **Kinetic step** (`propagators.jl`): Batched FFT — single forward/inverse FFT for all $D$ spinor components simultaneously (vs $D$ individual FFTs). Uses `BatchedKineticCache` with pre-allocated work array.
+
+**Losses** (`losses.jl`): $m$-dependent dipolar relaxation rates from rank-2 DDI tensor selection rules ($\Delta m = -1, -2$), with $m = -F$ stable. Applied in both standard and leapfrog loops.
 
 For real-time dynamics, a leapfrog-fused loop merges adjacent half potential steps $V(\Delta t/2) + V(\Delta t/2) = V(\Delta t)$ between time steps, splitting only at snapshot save points.
 
@@ -188,8 +204,8 @@ $S_4(\Delta t) = S_2(w_1 \Delta t) \circ S_2(w_0 \Delta t) \circ S_2(w_1 \Delta 
 
 - Embedded error estimator: $\|S_4(\Delta t)\psi - S_2(\Delta t)\psi\|/\|\psi\|$
 - PI controller: $(tol/err)^{1/(p+1)}$ with $p=4$
-- Fixed-$\Delta t$ cost: 1.94$\times$ Strang (3K + 4V vs 1K + 2V)
-- Adaptive benefit: 2--5$\times$ faster than adaptive Strang at same accuracy
+- Fixed-$\Delta t$ cost: 1.94× Strang (3K + 4V vs 1K + 2V)
+- Adaptive benefit: 2–5× faster than adaptive Strang at same accuracy
 
 ### Adaptive Time Stepping
 
@@ -200,19 +216,19 @@ Both `run_simulation_adaptive!` (Strang) and `run_simulation_yoshida!` support a
 - FSAL (first same as last) optimization for Strang
 - Configurable via `AdaptiveDtParams(dt_init, dt_min, dt_max, tol)`
 
-Benchmark on ${}^{151}$Eu 3D (32$^3$, 5 ms, $c_1 = 0$):
+Benchmark on $^{151}\mathrm{Eu}$ 3D ($32^3$, 5 ms, $c_1 = 0$):
 
 | Tolerance | Yoshida steps | Strang steps | Speedup |
 |-----------|--------------|-------------|---------|
-| 0.05 | 71 | 532 | 2.3$\times$ |
-| 0.01 | 77 | 1199 | 4.6$\times$ |
-| 0.005 | 86 | 1699 | 4.9$\times$ |
+| 0.05 | 71 | 532 | 2.3× |
+| 0.01 | 77 | 1199 | 4.6× |
+| 0.005 | 86 | 1699 | 4.9× |
 
 ### Real-Time Dynamics
 
 - Multi-phase sequences (output of phase $n$ feeds into phase $n+1$)
 - `TimeDependentZeeman` for linear ramps of $p(t)$, $q(t)$
-- Noise seeding: `noise_amplitude` in YAML phase config breaks symmetry (required for e.g. ${}^{151}$Eu EdH instability)
+- Noise seeding: `noise_amplitude` in YAML phase config breaks symmetry (required for e.g. $^{151}\mathrm{Eu}$ EdH instability)
 - Callback functions for intermediate state access
 - Adaptive time step with Strang or Yoshida integrators
 
@@ -268,7 +284,7 @@ Unitful support: `OpticalBeam(wavelength=1064u"nm", power=1u"W", waist=50u"μm")
 | Total norm | `total_norm(psi, grid)` | $\int n\, dV$ |
 | Magnetization | `magnetization(psi, grid, sys)` | $\int \sum_m m\,|\psi_m|^2\, dV$ |
 | Spin density vector | `spin_density_vector(psi, sm, ndim)` | $(\langle F_x \rangle, \langle F_y \rangle, \langle F_z \rangle)$ at each point |
-| Total energy | `total_energy(ws)` | $E_{\mathrm{kin}} + E_{\mathrm{trap}} + E_{\mathrm{Zee}} + E_{c_0} + E_{c_1} + E_{\mathrm{ddi}} + E_{\mathrm{LHY}} + E_{c_2}$ |
+| Total energy | `total_energy(ws)` | $E_{\mathrm{kin}} + E_{\mathrm{trap}} + E_{\mathrm{Zee}} + E_{c_0} + E_{c_1} + E_{\mathrm{ddi}} + E_{\mathrm{LHY}} + E_{\mathrm{tensor}} + E_{\mathrm{Raman}}$ |
 | Singlet pair amplitude | `singlet_pair_amplitude(psi, F, ndim)` | $A_{00} = \sum_m (-1)^{F-m} \psi_m \psi_{-m} / \sqrt{2F+1}$ |
 | Component populations | `component_populations(psi, grid, sys)` | Normalized occupation of each spin component |
 
@@ -346,7 +362,7 @@ Unitful.jl quantities are accepted directly as input.
 
 ## Performance
 
-### Large-$D$ Optimization ($D = 13$ for ${}^{151}$Eu)
+### Large-$D$ Optimization ($D = 13$ for $^{151}\mathrm{Eu}$)
 
 `SMatrix{13,13,ComplexF64}` (2704 bytes, 169 elements) exceeds the StaticArrays stack threshold, causing heap allocation in tight loops. Key optimizations:
 
@@ -355,7 +371,7 @@ Unitful.jl quantities are accepted directly as input.
 - **$F_y$ eigencache**: `SpinMatrices` stores `Fy_eigvecs`, `Fy_eigvecs_adj`, `Fy_eigvals` — avoids repeated eigendecomposition
 - **cis recurrence**: $F_y$ eigenvalues are integers $(-F \ldots F)$ → `cis(m \cdot \theta) = cis(\theta)^m$, reducing 65 `cis` calls to 6 + recurrence for $D=13$
 
-Result: 167 GiB $\to$ 43 MiB allocation, 698 $\to$ 122 ms/step (5.7$\times$ speedup) on ${}^{151}$Eu 32$^3$.
+Result: 167 GiB $\to$ 43 MiB allocation, 698 $\to$ 122 ms/step (5.7× speedup) on $^{151}\mathrm{Eu}$ $32^3$.
 
 ### General Optimizations
 
@@ -395,18 +411,20 @@ Benchmark scripts in `scripts/` (e.g., `bench_eu151.jl`) include tracing setup.
 | `grid.jl` | | `make_grid`, `make_fft_plans`, FFT wavenumber arrays |
 | `spin_matrices.jl` | | `SpinMatrices{D}` construction, $F_x, F_y, F_z$ static matrices, $F_y$ eigencache |
 | `spinor_utils.jl` | | `_get_spinor`/`_set_spinor!`, `_apply_euler_spin_rotation`, `_exp_i_hermitian` |
+| `clebsch_gordan.jl` | | `wigner_3j`, `clebsch_gordan`, `wigner_6j`, `precompute_cg_table` |
 | `atoms.jl` | | `AtomSpecies` definitions: `Rb87`, `Na23`, `Eu151` |
-| `interactions.jl` | | `InteractionParams`, `compute_c0`, `compute_c_dd`, `get_cn` |
+| `interactions.jl` | | `InteractionParams`, `compute_c0`, `compute_c_dd`, `interaction_params_from_constraint`, `get_cn` |
 | `potentials.jl` | | `HarmonicTrap`, `GravityPotential`, `CompositePotential`, `evaluate_potential` |
 | `zeeman.jl` | | `ZeemanParams`, `TimeDependentZeeman`, `zeeman_diagonal` |
 | `propagators.jl` | | `apply_kinetic_step!`, `apply_kinetic_step_batched!`, `apply_diagonal_potential_step!` |
 | `spin_mixing.jl` | | $c_1$ spin-dependent interaction: Rodrigues' ($D=3$), Euler rotation ($D>3$) |
 | `nematic.jl` | | $c_2$ singlet pair interaction: Bogoliubov $(m, -m)$ pair coupling |
+| `tensor_interaction.jl` | | General-$F$ tensor interaction: CG-based mean-field, eigendecomposition propagator |
 | `losses.jl` | | Dipolar relaxation ($m$-dependent rates), 3-body loss |
 | `split_step.jl` | | `split_step!`, `_half_potential_step!`, `_strang_core!`, `_yoshida_core!` |
 | `raman.jl` | | `RamanCoupling`, two-photon Raman transition step |
 | `ddi.jl` | | Core DDI: `_build_q_tensor!`, $k$-space convolution, unpadded step |
-| `ddi_padded.jl` | | Zero-padded DDI convolution (2$\times$ grid, reduced aliasing) |
+| `ddi_padded.jl` | | Zero-padded DDI convolution (2× grid, reduced aliasing) |
 | `optical_trap.jl` | | `GaussianBeam`, `CrossedDipoleTrap` |
 | `optics.jl` | | `OpticalBeam`, ABCD propagation, fiber coupling |
 | `laser_potential.jl` | | `LaserBeamPotential`, crossed laser trap |
@@ -419,14 +437,15 @@ Benchmark scripts in `scripts/` (e.g., `bench_eu151.jl`) include tracing setup.
 | `diagnostics.jl` | | Healing lengths, spin mixing period, phase diagram coordinates |
 | `majorana.jl` | | Majorana polynomial → stars on $S^2$, Steinhardt $Q_6$ order parameter |
 | `simulation_utils.jl` | | `_record_snapshot!`, `_check_energy_drift`, shared simulation helpers |
-| `initialization.jl` | | `init_psi`, initial state construction (polar, ferromagnetic, uniform) |
+| `initialization.jl` | | `init_psi`, `make_workspace`, initial state construction (polar, ferromagnetic, uniform) |
 | `ground_state.jl` | | `find_ground_state` — imaginary-time propagation |
-| `simulation.jl` | | `run_simulation!`, `make_workspace` |
+| `simulation.jl` | | `run_simulation!` (standard + leapfrog loops) |
 | `adaptive.jl` | | Adaptive Strang integration with FSAL, PI controller |
 | `yoshida.jl` | | Adaptive Yoshida 4th-order integration with embedded error estimator |
 | `io.jl` | | `save_state`/`load_state` (JLD2 format) |
 | `experiment.jl` | | YAML schema: `ExperimentConfig`, `PhaseConfig`, `GroundStateConfig` |
 | `experiment_runner.jl` | | `run_experiment`, noise seeding, multi-phase execution |
+| `unitful_support.jl` | | Unitful.jl quantity conversion for physical inputs |
 
 ## Testing
 
