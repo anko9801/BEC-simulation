@@ -1,10 +1,16 @@
 """
 Apply density-dependent loss step (dipolar relaxation + optional 3-body).
 
-Dipolar relaxation rate per component:
-  γ_m = Γ_dr × (F+m)(F-m+1) / (2F(2F+1))
+Dipolar relaxation rate per component m accounts for all Δm channels allowed by
+the rank-2 tensor structure of DDI (Δm = 0, ±1, ±2):
 
-m=-F (fully stretched) has γ=0 (stable).
+  γ_m = Γ_dr × Σ_{q=-2}^{2} |⟨F,m+q|T²_q|F,m⟩|² / Z
+
+where Z = Σ_m Σ_q |CG|² = F(F+1)(2F+1)(2F+3)(2F-1)/15 normalizes the total rate.
+
+For F=1 this reduces to the Δm=+1 only result: m=-F is stable.
+For F≥2 all |m|<F states can relax via Δm=0 and ±2 as well.
+
 3-body loss L3 is m-independent.
 
 Applied as: ψ_m → ψ_m × exp(-rate_m × n(r) × dt / 2)
@@ -28,11 +34,10 @@ function apply_loss_step!(
     n_pts = ntuple(d -> size(psi, d), ndim)
     _total_density!(density_buf, psi, n_components, ndim, n_pts)
 
-    scale = 1.0 / (2 * F * (2 * F + 1))
+    gamma_rates = _dipolar_relaxation_rates(F, loss.gamma_dr)
+
     for c in 1:n_components
-        m = F - (c - 1)
-        gamma_m = loss.gamma_dr * (F + m) * (F - m + 1) * scale
-        rate = gamma_m + loss.L3
+        rate = gamma_rates[c] + loss.L3
         rate < 1e-30 && continue
 
         idx = _component_slice(ndim, n_pts, c)
@@ -40,4 +45,40 @@ function apply_loss_step!(
         @. psi_view *= exp(-rate * density_buf * dt / 2)
     end
     nothing
+end
+
+"""
+Compute m-resolved dipolar relaxation rates γ_m for all 2F+1 components.
+
+DDI is a rank-2 tensor, allowing Δm = -1, -2 relaxation transitions (atoms lose
+Zeeman energy → gain kinetic energy → escape). Upward (Δm > 0) and elastic (Δm = 0)
+transitions are excluded since they don't release energy at low temperature.
+
+  γ_m = Γ_dr × Σ_{q ∈ {-1,-2}} |CG(F,m; 2,q | F,m+q)|² / Z
+
+Normalization: average rate per component = Γ_dr. m = -F is stable (no downward
+transitions exist).
+"""
+function _dipolar_relaxation_rates(F::Int, gamma_dr::Float64)
+    D = 2F + 1
+    raw = Vector{Float64}(undef, D)
+
+    raw_sum = 0.0
+    for c in 1:D
+        m = F - (c - 1)
+        s = 0.0
+        for q in (-1, -2)
+            mp = m + q
+            abs(mp) > F && continue
+            cg = clebsch_gordan(F, m, 2, q, F, mp)
+            s += cg * cg
+        end
+        raw[c] = s
+        raw_sum += s
+    end
+
+    raw_sum < 1e-30 && return zeros(Float64, D)
+
+    Z = raw_sum / D
+    [gamma_dr * raw[c] / Z for c in 1:D]
 end

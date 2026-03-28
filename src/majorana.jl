@@ -79,6 +79,9 @@ for a perfect icosahedron.
 
 Q₆_raw = √(4π/13 · (1/N²) Σ_{i,j} P₆(n̂_i · n̂_j))
 Normalized: Q₆ = Q₆_raw / Q₆_icosa where Q₆_icosa ≈ 0.6633.
+Q₆_icosa is computed from 12 vertices of a regular icosahedron (Steinhardt Table I).
+
+Ref: Steinhardt, Nelson, Ronchetti, Phys. Rev. B 28, 784 (1983), Table I.
 """
 function _steinhardt_q6(points::Vector{NTuple{3,Float64}})
     N = length(points)

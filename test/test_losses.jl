@@ -37,14 +37,15 @@
         pop_after = [sum(abs2, psi[:, c]) for c in 1:3]
 
         # c=1→m=+1, c=2→m=0, c=3→m=-1
-        # (F+m)(F-m+1): m=+1→2*1=2, m=0→1*2=2, m=-1→0*3=0
-        # m=-1 (c=3) is stable: γ=0, no decay
+        # Rank-2 DDI: downward transitions (Δm=-1, Δm=-2)
+        # m=+1: Δm=-1 (→0) and Δm=-2 (→-1), m=0: Δm=-1 (→-1) only
+        # m=-1: no downward transitions → stable
         @test pop_after[3] ≈ pop_before[3] rtol = 1e-14
 
-        # m=0 (c=2) and m=+1 (c=1) decay at the same rate for F=1
+        # Both m=+1 and m=0 decay, but m=+1 decays faster (2 channels vs 1)
         @test pop_after[1] < pop_before[1]
         @test pop_after[2] < pop_before[2]
-        @test pop_after[1] ≈ pop_after[2] rtol = 1e-10
+        @test pop_after[1] < pop_after[2]
     end
 
     @testset "m-dependent decay (spin-2)" begin
@@ -63,25 +64,46 @@
 
         pop_after = [sum(abs2, psi[:, c]) for c in 1:5]
 
-        # Components: c=1→m=+2, c=2→m=+1, c=3→m=0, c=4→m=-1, c=5→m=-2
-        # γ_m = Γ * (F+m)(F-m+1) / (2F(2F+1))
-        # m=+2: (4)(1)/20 = 4/20
-        # m=+1: (3)(2)/20 = 6/20   (maximum)
-        # m=0:  (2)(3)/20 = 6/20   (maximum)
-        # m=-1: (1)(4)/20 = 4/20
-        # m=-2: (0)(5)/20 = 0      (stable)
+        # Rank-2 DDI downward transitions (Δm = -1, -2):
+        # m=+2: Δm=-1(→+1), Δm=-2(→0) — 2 channels, highest rate
+        # m=+1: Δm=-1(→0), Δm=-2(→-1) — 2 channels
+        # m=0:  Δm=-1(→-1), Δm=-2(→-2) — 2 channels
+        # m=-1: Δm=-1(→-2) only — 1 channel
+        # m=-2: none — stable
 
         # m=-2 (c=5) unchanged
         @test pop_after[5] ≈ pop_before[5] rtol = 1e-14
 
-        # m=+1 (c=2) and m=0 (c=3) decay at same rate (both 6/20)
-        @test pop_after[2] ≈ pop_after[3] rtol = 1e-10
+        # All non-stable components decay
+        for c in 1:4
+            @test pop_after[c] < pop_before[c]
+        end
 
-        # m=+2 (c=1) and m=-1 (c=4) decay at same rate (both 4/20)
-        @test pop_after[1] ≈ pop_after[4] rtol = 1e-10
+        # m=+2 (c=1) has the highest rate (CG² for both Δm=-1 and Δm=-2 are large)
+        @test pop_after[1] < pop_after[2]
+        @test pop_after[1] < pop_after[3]
+    end
 
-        # m=0 (c=3) decays more than m=+2 (c=1)
-        @test pop_after[3] < pop_after[1]
+    @testset "_dipolar_relaxation_rates properties" begin
+        for F in [1, 2, 3, 6]
+            rates = SpinorBEC._dipolar_relaxation_rates(F, 1.0)
+            D = 2F + 1
+            @test length(rates) == D
+
+            # m=-F is stable
+            @test rates[D] ≈ 0.0 atol = 1e-15
+
+            # Average rate = gamma_dr
+            @test sum(rates) / D ≈ 1.0 rtol = 1e-12
+
+            # All rates non-negative
+            @test all(r -> r >= -1e-15, rates)
+        end
+
+        # F=6: all non-terminal components have nonzero rates (Δm=-1 and/or Δm=-2)
+        rates6 = SpinorBEC._dipolar_relaxation_rates(6, 0.5)
+        @test all(r -> r > 0.01, rates6[1:12])
+        @test rates6[13] ≈ 0.0 atol = 1e-15
     end
 
     @testset "Density dependence" begin

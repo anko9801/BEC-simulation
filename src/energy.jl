@@ -14,8 +14,20 @@ function total_energy(ws::Workspace{N}) where {N}
     E_trap = _trap_energy(psi, ws.potential_values, n_comp, N, n_pts, dV)
     zee = zeeman_at(ws.zeeman, ws.state.t)
     E_zee = _zeeman_energy(psi, zee, ws.spin_matrices.system, n_comp, N, n_pts, dV)
-    E_c0 = _density_interaction_energy(psi, ws.interactions.c0, n_comp, N, n_pts, dV)
-    E_c1 = _spin_interaction_energy(psi, ws.spin_matrices, ws.interactions.c1, n_comp, N, n_pts, dV)
+
+    # When tensor_cache is active, it handles ALL contact interactions (c₀ through c_{2F}).
+    # ws.interactions.c0/c1 are guaranteed zero by make_workspace, but skip explicitly
+    # to avoid computing unnecessary spin density vectors.
+    E_c0 = if ws.tensor_cache === nothing
+        _density_interaction_energy(psi, ws.interactions.c0, n_comp, N, n_pts, dV)
+    else
+        0.0
+    end
+    E_c1 = if ws.tensor_cache === nothing
+        _spin_interaction_energy(psi, ws.spin_matrices, ws.interactions.c1, n_comp, N, n_pts, dV)
+    else
+        0.0
+    end
 
     E_ddi = if ws.ddi !== nothing
         _ddi_energy(psi, ws.spin_matrices, ws.ddi, ws.ddi_bufs, n_comp, N, n_pts, dV)
