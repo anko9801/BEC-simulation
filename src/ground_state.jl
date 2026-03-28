@@ -152,11 +152,12 @@ function _rebuild_workspace_with_dt(ws::Workspace{N}, new_dt::Float64) where {N}
     sp = SimParams(new_dt, ws.sim_params.n_steps, true,
                    ws.sim_params.normalize_every, ws.sim_params.save_every)
     kinetic_phase = prepare_kinetic_phase(ws.grid, new_dt; imaginary_time=true)
+    batched_kinetic = _make_batched_kinetic_cache(ws.state.psi, kinetic_phase, N)
 
     Workspace(
         ws.state, ws.fft_plans, kinetic_phase, ws.potential_values, ws.density_buf,
         ws.spin_matrices, ws.grid, ws.atom, ws.interactions,
         ws.zeeman, ws.potential, sp, ws.ddi, ws.ddi_bufs, ws.raman, ws.loss,
-        ws.ddi_padded, ws.batched_kinetic, ws.tensor_cache,
+        ws.ddi_padded, batched_kinetic, ws.tensor_cache,
     )
 end

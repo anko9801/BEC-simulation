@@ -55,7 +55,7 @@ using LinearAlgebra
         spinor_norm = spinor / sqrt(sum(abs2, spinor))
 
         result = SpinorBEC._apply_euler_spin_rotation(
-            spinor_norm, 1e-14, 0.0, 0.0,
+            spinor_norm, 1e-16, 0.0, 0.0,
             1.0, F, m_vals,
             sm.Fy_eigvecs, sm.Fy_eigvecs_adj, sm.Fy_eigvals,
             sm, false,

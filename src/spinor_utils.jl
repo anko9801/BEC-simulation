@@ -87,7 +87,7 @@ Handles both real-time (Dz: cis) and imaginary-time (Dz: exp) propagation.
     sm::SpinMatrices, imaginary_time::Bool,
 ) where {D}
     phi_mag = sqrt(phi_x^2 + phi_y^2 + phi_z^2)
-    if phi_mag < 1e-12
+    if phi_mag * abs(dt) < 1e-14
         return spinor
     end
 
