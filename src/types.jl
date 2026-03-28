@@ -356,6 +356,21 @@ struct AdaptiveDtParams
     end
 end
 
+struct TOFParams
+    t_tof::Float64
+    gradient::Float64
+    imaging_axis::Int
+
+    function TOFParams(t_tof::Float64, gradient::Float64, imaging_axis::Int)
+        t_tof >= 0 || throw(ArgumentError("t_tof must be non-negative"))
+        1 <= imaging_axis <= 3 || throw(ArgumentError("imaging_axis must be 1, 2, or 3"))
+        new(t_tof, gradient, imaging_axis)
+    end
+end
+
+TOFParams(; t_tof::Float64, gradient::Float64=0.0, imaging_axis::Int=3) =
+    TOFParams(t_tof, gradient, imaging_axis)
+
 # --- Workspace ---
 
 struct Workspace{N,A,P,IP,SM<:SpinMatrices,ZEE,DDI,DDIB,RAM,LOSS,DDIP,BK,TC}

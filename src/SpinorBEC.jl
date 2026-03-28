@@ -34,6 +34,7 @@ include("optical_trap.jl")
 include("optics.jl")
 include("laser_potential.jl")
 include("thomas_fermi.jl")
+include("tof.jl")
 include("fft_utils.jl")
 include("observables.jl")
 include("energy.jl")
@@ -58,6 +59,7 @@ include("unitful_support.jl")
 export GridConfig, Grid, SpinSystem, SpinMatrices
 export AtomSpecies, InteractionParams, ZeemanParams, LossParams, TensorInteractionCache
 export SimParams, SimState, FFTPlans, RFFTPlans, Workspace, AdaptiveDtParams
+export TOFParams
 export HarmonicTrap, NoPotential, GravityPotential, CompositePotential
 
 # Grid
@@ -99,6 +101,7 @@ export LaserBeamPotential, crossed_laser_trap
 
 # Thomas-Fermi
 export thomas_fermi_density, init_psi_thomas_fermi
+export simulate_tof
 
 # Propagators
 export apply_kinetic_step!, apply_kinetic_step_batched!, apply_diagonal_potential_step!

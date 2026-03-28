@@ -45,4 +45,5 @@ using SpinorBEC
     include("test_checkpoint.jl")
     include("test_continuation.jl")
     include("test_phase_boundary.jl")
+    include("test_tof.jl")
 end
