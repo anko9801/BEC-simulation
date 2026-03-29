@@ -138,6 +138,12 @@ Processes even-rank entries k ∈ {2, 4, ..., 2F} from `c_extra`, where
 Odd-rank and zero entries are skipped.
 """
 function _c_extra_to_delta_gS(F::Int, c_extra::Vector{Float64})
+    for (idx, val) in enumerate(c_extra)
+        k = idx + 1
+        if abs(val) > 1e-30 && isodd(k)
+            @warn "c_extra[$idx] (c$k) is odd-rank and will be ignored; only even-rank couplings (c2, c4, ...) contribute" maxlog=1
+        end
+    end
     c_dict = Dict{Int,Float64}()
     for (idx, val) in enumerate(c_extra)
         k = idx + 1

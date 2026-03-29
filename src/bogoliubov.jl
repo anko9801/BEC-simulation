@@ -9,6 +9,11 @@ Returns `BdGResult` with dispersion relations and stability info.
 - L_{mm'} = (k²/2 - μ + zee_m)δ_{mm'} + 2n₀ Σ_S g_S Σ_{M,μ,ν} CG CG ζ*_μ ζ_ν
 - M_{mm'} = n₀ Σ_S g_S Σ_M CG(m,m'|S,M) A_{SM}
   where A_{SM} = Σ_{μ,ν} CG(μ,ν|S,M) ζ_μ ζ_ν
+
+When `c_dd > 0`, the DDI tensor Q_αβ(k) = k̂_αk̂_β − δ_αβ/3 depends on k̂.
+Different `k_direction` values yield different instability thresholds.
+Scan multiple directions (e.g. `(1,0,0)`, `(0,0,1)`, `(1,1,0)/√2`) to
+find the most unstable mode.
 """
 function bogoliubov_spectrum(;
     spinor::Vector{ComplexF64},
