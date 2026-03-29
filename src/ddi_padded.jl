@@ -60,27 +60,7 @@ function _compute_and_convolve_ddi_padded!(
     ctx.Fy_pad .= 0
     ctx.Fz_pad .= 0
 
-    F = sm.system.F
-    Ff1 = Float64(F * (F + 1))
-    m_vals = ntuple(c -> Float64(F - (c - 1)), Val(D))
-    fp_coeffs = ntuple(c -> c == 1 ? 0.0 : sqrt(Ff1 - m_vals[c] * (m_vals[c] + 1.0)), Val(D))
-
-    @inbounds for I in CartesianIndices(n_pts)
-        fz_val = 0.0
-        for c in 1:D
-            fz_val += m_vals[c] * abs2(psi[I, c])
-        end
-        fxy_re = 0.0
-        fxy_im = 0.0
-        for c in 2:D
-            prod_val = conj(psi[I, c - 1]) * psi[I, c]
-            fxy_re += fp_coeffs[c] * real(prod_val)
-            fxy_im += fp_coeffs[c] * imag(prod_val)
-        end
-        ctx.Fx_pad[I] = fxy_re
-        ctx.Fy_pad[I] = fxy_im
-        ctx.Fz_pad[I] = fz_val
-    end
+    _compute_spin_density!(ctx.Fx_pad, ctx.Fy_pad, ctx.Fz_pad, psi, sm, Val(D), ndim, n_pts)
 
     rp = ctx.rfft_plans
     mul!(ctx.Fx_pad_rk, rp.forward, ctx.Fx_pad)
