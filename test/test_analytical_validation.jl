@@ -283,5 +283,18 @@ using LinearAlgebra
             ip = InteractionParams(100.0, 0.0)
             @test SpinorBEC._validate_itp_interactions(ip, 6, 0.01; c_dd=0.0) === nothing
         end
+
+        @testset "runtime NaN detection" begin
+            grid = make_grid(GridConfig((16,), (10.0,)))
+            sys = SpinSystem(1)
+            psi_nan = zeros(ComplexF64, 16, 3)
+            psi_nan[1, 1] = NaN
+            sp = SimParams(; dt=0.001, n_steps=1, imaginary_time=true)
+            ws = make_workspace(; grid, atom=Rb87,
+                interactions=InteractionParams(100.0, 0.0),
+                zeeman=ZeemanParams(), potential=NoPotential(),
+                sim_params=sp, psi_init=psi_nan)
+            @test_throws ArgumentError SpinorBEC._check_itp_overflow(ws, 1)
+        end
     end
 end

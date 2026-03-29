@@ -1,4 +1,32 @@
 const _ITP_EXPONENT_LIMIT = 50.0
+const _ITP_DDI_WARN_EXPONENT = 20.0
+
+function _check_itp_overflow(ws, step::Int)
+    if any(isnan, ws.state.psi)
+        throw(ArgumentError(
+            "NaN detected in ITP at step $step. " *
+            "Likely DDI potential overflow. Reduce dt."
+        ))
+    end
+    ws.ddi === nothing && return nothing
+    bufs = ws.ddi_bufs
+    phi_max = max(
+        maximum(abs, bufs.Phi_x),
+        maximum(abs, bufs.Phi_y),
+        maximum(abs, bufs.Phi_z),
+    )
+    dt = ws.sim_params.dt
+    exponent = phi_max * dt / 2
+    if exponent > _ITP_EXPONENT_LIMIT
+        throw(ArgumentError(
+            "DDI potential overflow in ITP at step $step: " *
+            "max|Φ|=$(round(phi_max, sigdigits=3)), " *
+            "exponent=$(round(exponent, digits=1)) > $_ITP_EXPONENT_LIMIT. " *
+            "Reduce dt (current=$dt)."
+        ))
+    end
+    nothing
+end
 
 function _validate_itp_zeeman(zeeman::ZeemanParams, F, dt)
     sys = SpinSystem(F)
@@ -109,6 +137,7 @@ function find_ground_state(;
 
     for step in 1:n_steps
         split_step!(ws)
+        step <= 10 && _check_itp_overflow(ws, step)
         if use_constrained
             _normalize_psi_constrained!(ws.state.psi, ws.grid, n_comp, N_dim,
                                         target_magnetization, atom.F)
@@ -163,14 +192,15 @@ function _find_ground_state_adaptive(;
     while total_steps < n_steps
         copyto!(psi_backup, ws.state.psi)
 
-        for _ in 1:check_every
+        for i in 1:check_every
             split_step!(ws)
+            i == 1 && total_steps == 0 && _check_itp_overflow(ws, 1)
         end
         total_steps += check_every
 
         E = total_energy(ws)
 
-        if E > E_prev
+        if isnan(E) || E > E_prev
             copyto!(ws.state.psi, psi_backup)
             current_dt = max(current_dt * 0.5, 1e-8)
             ws = _rebuild_workspace_with_dt(ws, current_dt)
