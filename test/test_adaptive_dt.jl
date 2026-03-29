@@ -29,14 +29,19 @@ using SpinorBEC
         @test p.dt_min == 1e-5
         @test p.dt_max == 0.01
         @test p.tol == 1e-3
+        @test p.error_mode === :step_change
 
         p2 = AdaptiveDtParams(dt_init=0.005, dt_min=1e-4, dt_max=0.05, tol=1e-2)
         @test p2.dt_init == 0.005
         @test p2.dt_max == 0.05
 
+        p3 = AdaptiveDtParams(error_mode=:richardson)
+        @test p3.error_mode === :richardson
+
         @test_throws ArgumentError AdaptiveDtParams(dt_init=-1.0)
         @test_throws ArgumentError AdaptiveDtParams(dt_min=0.1, dt_max=0.01)
         @test_throws ArgumentError AdaptiveDtParams(tol=-1.0)
+        @test_throws ArgumentError AdaptiveDtParams(error_mode=:foo)
     end
 
     @testset "run_simulation_adaptive!" begin
@@ -101,6 +106,32 @@ using SpinorBEC
         @test SpinorBEC._wavefunction_l2_change(global_phase, a) ≈ expected rtol=1e-10
     end
 
+    @testset "run_simulation_adaptive! richardson mode" begin
+        grid = make_grid(GridConfig(64, 20.0))
+        atom = Rb87
+        interactions = InteractionParams(10.0, -0.5)
+        potential = HarmonicTrap(1.0)
+
+        sp = SimParams(; dt=0.001, n_steps=1)
+        ws = make_workspace(; grid, atom, interactions, potential, sim_params=sp)
+        adaptive = AdaptiveDtParams(dt_init=0.001, dt_min=1e-5, dt_max=0.01, tol=1e-3, error_mode=:richardson)
+        out = run_simulation_adaptive!(ws; adaptive, t_end=0.5, save_interval=0.1)
+
+        @test out.n_accepted > 0
+        @test length(out.result.times) >= 3
+        @test out.result.times[end] >= 0.5 - 0.01
+
+        N0 = out.result.norms[1]
+        for n in out.result.norms
+            @test n ≈ N0 rtol = 1e-4
+        end
+
+        sp_fixed = SimParams(; dt=0.001, n_steps=500, save_every=500)
+        ws_fixed = make_workspace(; grid, atom, interactions, potential, sim_params=sp_fixed)
+        res_fixed = run_simulation!(ws_fixed)
+        @test abs(res_fixed.energies[end] - out.result.energies[end]) / abs(res_fixed.energies[end]) < 0.01
+    end
+
     @testset "YAML adaptive_dt parsing" begin
         yaml = """
         experiment:
@@ -139,6 +170,42 @@ using SpinorBEC
         @test cfg.sequence[2].adaptive_dt.dt_min == 0.0001
         @test cfg.sequence[2].adaptive_dt.dt_max == 0.05
         @test cfg.sequence[2].adaptive_dt.tol == 0.002
+    end
+
+    @testset "YAML adaptive_dt error_mode parsing" begin
+        yaml = """
+        experiment:
+          name: richardson_test
+          system:
+            atom: Rb87
+            grid:
+              n_points: 32
+              box_size: 10.0
+            interactions:
+              c0: 1.0
+              c1: 0.0
+          sequence:
+            - name: default_mode
+              duration: 1.0
+              dt: 0.01
+              adaptive_dt:
+                tol: 0.001
+              zeeman:
+                p: 0.0
+                q: 0.0
+            - name: richardson_mode
+              duration: 1.0
+              dt: 0.01
+              adaptive_dt:
+                tol: 0.001
+                error_mode: richardson
+              zeeman:
+                p: 0.0
+                q: 0.0
+        """
+        cfg = load_experiment_from_string(yaml)
+        @test cfg.sequence[1].adaptive_dt.error_mode === :step_change
+        @test cfg.sequence[2].adaptive_dt.error_mode === :richardson
     end
 
     @testset "YAML adaptive_dt defaults" begin

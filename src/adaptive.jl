@@ -60,6 +60,18 @@ function run_simulation_adaptive!(ws::Workspace{N};
     save_interval::Float64,
     callback::Union{Nothing,Function}=nothing,
 ) where {N}
+    if adaptive.error_mode === :richardson
+        return _adaptive_richardson_loop!(ws; adaptive, t_end, save_interval, callback)
+    end
+    _adaptive_step_change_loop!(ws; adaptive, t_end, save_interval, callback)
+end
+
+function _adaptive_step_change_loop!(ws::Workspace{N};
+    adaptive::AdaptiveDtParams,
+    t_end::Float64,
+    save_interval::Float64,
+    callback::Union{Nothing,Function}=nothing,
+) where {N}
     n_comp = ws.spin_matrices.system.n_components
     sys = ws.spin_matrices.system
 
@@ -172,6 +184,107 @@ function run_simulation_adaptive!(ws::Workspace{N};
 
     if fsal_deferred
         _flush_fsal!(ws, fsal_dt, n_comp, N)
+    end
+
+    if isempty(times) || abs(times[end] - ws.state.t) > 1e-12
+        _record_snapshot!(times, energies, norms, mags, snapshots, ws, sys)
+    end
+
+    (result=SimulationResult(times, energies, norms, mags, snapshots),
+     n_accepted=n_accepted, n_rejected=n_rejected, final_dt=dt)
+end
+
+@inline function _full_strang_step!(ws::Workspace{N}, dt_step, n_comp, bk) where {N}
+    _half_potential_step!(ws, dt_step / 2, n_comp, N, false)
+    apply_kinetic_step_batched!(ws.state.psi, bk)
+    _half_potential_step!(ws, dt_step / 2, n_comp, N, false)
+    nothing
+end
+
+function _adaptive_richardson_loop!(ws::Workspace{N};
+    adaptive::AdaptiveDtParams,
+    t_end::Float64,
+    save_interval::Float64,
+    callback::Union{Nothing,Function}=nothing,
+) where {N}
+    n_comp = ws.spin_matrices.system.n_components
+    sys = ws.spin_matrices.system
+
+    dt = clamp(adaptive.dt_init, adaptive.dt_min, adaptive.dt_max)
+    bk = ws.batched_kinetic
+
+    times = Float64[]
+    energies = Float64[]
+    norms = Float64[]
+    mags = Float64[]
+    snapshots = Array{ComplexF64}[]
+    _record_snapshot!(times, energies, norms, mags, snapshots, ws, sys)
+
+    psi_saved = similar(ws.state.psi)
+    psi_full = similar(ws.state.psi)
+    next_save = ws.state.t + save_interval
+    n_accepted = 0
+    n_rejected = 0
+
+    while ws.state.t < t_end - 1e-14
+        dt_step = min(dt, t_end - ws.state.t)
+        remaining_to_save = next_save - ws.state.t
+        if remaining_to_save > 1e-14 && remaining_to_save < dt_step
+            dt_step = remaining_to_save
+        end
+        dt_step = max(dt_step, adaptive.dt_min)
+
+        is_clamped = dt_step < dt * 0.99
+        may_reject = !is_clamped && dt_step > adaptive.dt_min * 1.01
+
+        psi_saved .= ws.state.psi
+
+        _update_batched_kinetic_phase!(bk, ws.grid.k_squared, dt_step)
+        _full_strang_step!(ws, dt_step, n_comp, bk)
+        psi_full .= ws.state.psi
+
+        ws.state.psi .= psi_saved
+        dt_half = dt_step / 2
+        _update_batched_kinetic_phase!(bk, ws.grid.k_squared, dt_half)
+        _full_strang_step!(ws, dt_half, n_comp, bk)
+        _full_strang_step!(ws, dt_half, n_comp, bk)
+
+        err = _wavefunction_l2_change(psi_full, ws.state.psi)
+
+        if may_reject && err > adaptive.tol
+            ws.state.psi .= psi_saved
+            factor = max(0.5, 0.9 * cbrt(adaptive.tol / err))
+            dt = max(dt_step * factor, adaptive.dt_min)
+            n_rejected += 1
+            continue
+        end
+
+        if ws.loss !== nothing
+            apply_loss_step!(ws.state.psi, ws.loss, ws.spin_matrices.system.F, dt_step, n_comp, N, ws.density_buf)
+        end
+
+        ws.state.t += dt_step
+        ws.state.step += 1
+        n_accepted += 1
+
+        if !is_clamped
+            factor = err > 1e-300 ? min(2.0, 0.9 * cbrt(adaptive.tol / err)) : 2.0
+            dt = clamp(dt * factor, adaptive.dt_min, adaptive.dt_max)
+        end
+
+        if ws.state.t >= next_save - 1e-14
+            E_now = total_energy(ws)
+            nrm_now = total_norm(ws.state.psi, ws.grid)
+            _check_energy_drift(energies, norms, E_now, nrm_now, ws.state.t)
+
+            push!(times, ws.state.t)
+            push!(energies, E_now)
+            push!(norms, nrm_now)
+            push!(mags, magnetization(ws.state.psi, ws.grid, sys))
+            push!(snapshots, copy(ws.state.psi))
+            callback !== nothing && callback(ws, n_accepted)
+            next_save += save_interval
+        end
     end
 
     if isempty(times) || abs(times[end] - ws.state.t) > 1e-12

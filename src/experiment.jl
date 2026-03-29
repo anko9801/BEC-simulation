@@ -189,6 +189,7 @@ function _parse_phase(d::Dict)
             dt_min=Float64(get(ad, "dt_min", 1e-5)),
             dt_max=Float64(get(ad, "dt_max", 10 * dt)),
             tol=Float64(get(ad, "tol", 1e-3)),
+            error_mode=Symbol(get(ad, "error_mode", "step_change")),
         )
     else
         nothing

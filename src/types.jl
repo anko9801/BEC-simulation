@@ -345,14 +345,18 @@ struct AdaptiveDtParams
     dt_min::Float64
     dt_max::Float64
     tol::Float64
+    error_mode::Symbol
 
     function AdaptiveDtParams(; dt_init::Float64=0.001, dt_min::Float64=1e-5,
-                               dt_max::Float64=0.01, tol::Float64=1e-3)
+                               dt_max::Float64=0.01, tol::Float64=1e-3,
+                               error_mode::Symbol=:step_change)
         dt_init > 0 || throw(ArgumentError("dt_init must be positive"))
         dt_min > 0 || throw(ArgumentError("dt_min must be positive"))
         dt_max >= dt_min || throw(ArgumentError("dt_max must be >= dt_min"))
         tol > 0 || throw(ArgumentError("tol must be positive"))
-        new(dt_init, dt_min, dt_max, tol)
+        error_mode in (:step_change, :richardson) || throw(ArgumentError(
+            "error_mode must be :step_change or :richardson, got :$error_mode"))
+        new(dt_init, dt_min, dt_max, tol, error_mode)
     end
 end
 
