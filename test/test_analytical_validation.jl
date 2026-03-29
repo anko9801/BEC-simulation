@@ -297,4 +297,32 @@ using LinearAlgebra
             @test_throws ArgumentError SpinorBEC._check_itp_overflow(ws, 1)
         end
     end
+
+    # --- Test 7: Constrained Magnetization Newton Convergence ---
+    @testset "constrained magnetization Jacobian" begin
+        config = GridConfig(64, 10.0)
+        grid = make_grid(config)
+        dV = cell_volume(grid)
+        n0 = 1.0 / grid.config.box_size[1]
+
+        @testset "F=1 target Mz=0.5 converges" begin
+            psi = zeros(ComplexF64, 64, 3)
+            psi[:, 1] .= sqrt(n0 * 0.7)
+            psi[:, 2] .= sqrt(n0 * 0.2)
+            psi[:, 3] .= sqrt(n0 * 0.1)
+            SpinorBEC._normalize_psi_constrained!(psi, grid, 3, 1, 0.5, 1)
+            Mz = sum((1 - (c - 1)) * sum(abs2, view(psi, :, c)) * dV for c in 1:3)
+            @test Mz ≈ 0.5 atol = 1e-10
+        end
+
+        @testset "F=6 target Mz=3.0 converges" begin
+            psi = zeros(ComplexF64, 64, 13)
+            for c in 1:13
+                psi[:, c] .= sqrt(n0 / 13)
+            end
+            SpinorBEC._normalize_psi_constrained!(psi, grid, 13, 1, 3.0, 6)
+            Mz = sum((6 - (c - 1)) * sum(abs2, view(psi, :, c)) * dV for c in 1:13)
+            @test Mz ≈ 3.0 atol = 1e-10
+        end
+    end
 end

@@ -300,7 +300,7 @@ function _normalize_psi_constrained!(psi, grid, n_components, ndim, target_Mz, F
         dMz = 0.0
         for c in 1:n_components
             m = F - (c - 1)
-            dMz += 2 * m * (m * norms[c] / total - Mz * m * norms[c] / total)
+            dMz += 2 * m * (m - Mz) * norms[c] / total
         end
         abs(dMz) < 1e-30 && break
 
