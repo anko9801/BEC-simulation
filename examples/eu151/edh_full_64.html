@@ -3,80 +3,84 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Eu151 Einstein-de Haas Dynamics (64³)</title>
+<title>Eu151 EdH Dynamics — Per-Component (64³)</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{background:#0a0a1a;color:#e0e0e0;font-family:'Segoe UI',system-ui,sans-serif;padding:16px}
-h1{text-align:center;font-size:1.4em;color:#88ccff;margin-bottom:4px}
-.sub{text-align:center;font-size:.8em;color:#556;margin-bottom:16px}
-.controls{text-align:center;margin-bottom:16px;display:flex;justify-content:center;align-items:center;gap:12px;flex-wrap:wrap}
-.controls button{background:#2a2a5a;color:#aac;border:1px solid #3a3a7a;border-radius:4px;padding:6px 14px;cursor:pointer;font-size:.85em}
+body{background:#0a0a1a;color:#e0e0e0;font-family:'Segoe UI',system-ui,sans-serif;padding:12px}
+h1{text-align:center;font-size:1.3em;color:#88ccff;margin-bottom:2px}
+.sub{text-align:center;font-size:.78em;color:#556;margin-bottom:12px}
+.controls{text-align:center;margin-bottom:10px;display:flex;justify-content:center;align-items:center;gap:10px;flex-wrap:wrap}
+.controls button{background:#2a2a5a;color:#aac;border:1px solid #3a3a7a;border-radius:4px;padding:5px 12px;cursor:pointer;font-size:.82em}
 .controls button:hover{background:#3a3a7a}
 .controls button.active{background:#4466aa;border-color:#6688cc}
-#slider{width:300px;accent-color:#4466aa}
-#time-label{font-size:1.1em;color:#6cf;font-weight:bold;min-width:80px}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;max-width:1100px;margin:0 auto}
-.panel{background:#12122a;border:1px solid #2a2a4a;border-radius:8px;padding:12px}
-.panel h2{font-size:.85em;color:#aac;margin-bottom:6px}
-canvas{display:block;margin:0 auto;image-rendering:pixelated;border-radius:4px}
-.wide{grid-column:1/-1}
-.stats{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-bottom:12px}
-.stat{background:#1a1a3a;border:1px solid #2a2a5a;border-radius:6px;padding:8px 14px;text-align:center}
-.stat .v{font-size:1.2em;color:#6cf;font-weight:bold}
-.stat .l{font-size:.7em;color:#889;margin-top:2px}
-.pop-bar{display:flex;height:20px;border-radius:3px;overflow:hidden;margin:4px 0}
+#slider{width:260px;accent-color:#4466aa}
+#time-label{font-size:1.1em;color:#6cf;font-weight:bold;min-width:70px}
+.stats{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-bottom:10px}
+.stat{background:#1a1a3a;border:1px solid #2a2a5a;border-radius:5px;padding:6px 12px;text-align:center}
+.stat .v{font-size:1.1em;color:#6cf;font-weight:bold}
+.stat .l{font-size:.65em;color:#889;margin-top:1px}
+.section{max-width:1200px;margin:0 auto 12px}
+.section h2{font-size:.9em;color:#aac;margin-bottom:6px;padding-left:4px}
+.pop-bar{display:flex;height:22px;border-radius:3px;overflow:hidden;margin:2px 0}
 .pop-bar div{transition:width .3s}
-.pop-legend{font-size:.7em;color:#889;margin-top:4px;display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
-.info{font-size:.7em;color:#556;margin-top:4px;text-align:center}
+.pop-legend{font-size:.68em;color:#889;margin-top:3px;display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
+.comp-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.comp-cell{background:#0e0e20;border:1px solid #1a1a3a;border-radius:4px;padding:4px;text-align:center}
+.comp-cell .label{font-size:.7em;color:#889;margin-bottom:2px}
+.comp-cell canvas{display:block;margin:0 auto;image-rendering:pixelated;border-radius:2px}
+.total-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+.total-row .panel{background:#12122a;border:1px solid #2a2a4a;border-radius:6px;padding:8px}
+.total-row .panel h3{font-size:.8em;color:#8a8;margin-bottom:4px}
+.total-row canvas{display:block;margin:0 auto;image-rendering:pixelated;border-radius:3px}
+.profile-panel{background:#12122a;border:1px solid #2a2a4a;border-radius:6px;padding:8px}
+.profile-panel canvas{width:100%;height:220px}
+.profile-panel .info{font-size:.68em;color:#556;text-align:center;margin-top:3px}
 </style>
 </head>
 <body>
-<h1>¹⁵¹Eu Einstein-de Haas Dynamics</h1>
-<div class="sub">64³ grid | c₀=2344, c₁=65, c_dd=7597 | Buchachenko (c₁/c₀=1/36) | B=2.6nT</div>
+<h1>¹⁵¹Eu Einstein-de Haas — Component Densities</h1>
+<div class="sub">64³ | c₁/c₀=1/36 (Buchachenko) | c_dd=7597 | B=2.6nT</div>
 
 <div class="controls">
   <button id="btn-play">Play</button>
   <input id="slider" type="range" min="0" max="10" value="0">
   <span id="time-label">0.0 ms</span>
 </div>
-
 <div class="stats" id="stats"></div>
 
-<div class="panel wide" style="max-width:1100px;margin:0 auto 12px">
-  <h2>Component populations P(m)</h2>
+<div class="section">
+  <h2>Population Distribution</h2>
   <div class="pop-bar" id="pop-bar"></div>
   <div class="pop-legend" id="pop-legend"></div>
 </div>
 
-<div class="grid" style="max-width:1100px;margin:0 auto">
-  <div class="panel">
-    <h2>xy slice n(x,y,0)</h2>
-    <canvas id="c_xy" width="256" height="256"></canvas>
+<div class="section">
+  <h2>Total Density</h2>
+  <div class="total-row">
+    <div class="panel"><h3>xy slice n(x,y,0)</h3><canvas id="c_xy" width="192" height="192"></canvas></div>
+    <div class="panel"><h3>xz slice n(x,0,z)</h3><canvas id="c_xz" width="192" height="192"></canvas></div>
   </div>
-  <div class="panel">
-    <h2>xz slice n(x,0,z)</h2>
-    <canvas id="c_xz" width="256" height="256"></canvas>
-  </div>
-  <div class="panel">
-    <h2>Column density ∫n dz</h2>
-    <canvas id="c_col_xy" width="256" height="256"></canvas>
-  </div>
-  <div class="panel">
-    <h2>Column density ∫n dy</h2>
-    <canvas id="c_col_xz" width="256" height="256"></canvas>
-  </div>
-  <div class="panel wide">
-    <h2>1D profiles through center</h2>
+</div>
+
+<div class="section">
+  <h2>Per-Component Column Density ∫n_m dz (m = +6 … −6)</h2>
+  <div class="comp-grid" id="comp-grid"></div>
+</div>
+
+<div class="section">
+  <h2>1D Profiles n_m(x, 0, 0)</h2>
+  <div class="profile-panel">
     <canvas id="c_profiles"></canvas>
-    <div class="info">red: n(x,0,0) | blue: n(0,0,z)</div>
+    <div class="info">Each color = one m component | dashed = total</div>
   </div>
 </div>
 
 <script>
 const DATA_URL='edh_full_64.json';
-let DATA=null, currentIdx=0, playing=false, playTimer=null;
-
-const mColors=['#e6194b','#f58231','#ffe119','#bfef45','#3cb44b','#42d4f4','#4363d8','#911eb4','#f032e6','#a9a9a9','#9A6324','#800000','#469990'];
+let DATA=null,currentIdx=0,playing=false,playTimer=null;
+const D=13;
+const mLabels=[];for(let c=0;c<13;c++)mLabels.push(6-c);
+const mColors=['#e6194b','#f58231','#ffe119','#bfef45','#3cb44b','#42d4f4','#4363d8','#911eb4','#f032e6','#fabed4','#9A6324','#800000','#469990'];
 
 function inferno(t){
   t=Math.max(0,Math.min(1,t));
@@ -86,10 +90,9 @@ function inferno(t){
   return[r,g,b];
 }
 
-function drawHeatmap(id,flat,N,maxV){
-  const c=document.getElementById(id),ctx=c.getContext('2d'),w=c.width,h=c.height;
-  const img=ctx.createImageData(w,h);
-  const s=N/w;
+function drawHM(canvas,flat,N,maxV){
+  const ctx=canvas.getContext('2d'),w=canvas.width,h=canvas.height;
+  const img=ctx.createImageData(w,h),s=N/w;
   for(let py=0;py<h;py++)for(let px=0;px<w;px++){
     const v=flat[Math.floor(py*s)*N+Math.floor(px*s)]||0;
     const[r,g,b]=inferno(maxV>0?v/maxV:0);
@@ -99,59 +102,79 @@ function drawHeatmap(id,flat,N,maxV){
   ctx.putImageData(img,0,0);
 }
 
-function drawProfiles(id,frame,x,z){
+function initCompGrid(){
+  const g=document.getElementById('comp-grid');
+  g.innerHTML='';
+  for(let c=0;c<D;c++){
+    const m=mLabels[c];
+    const cell=document.createElement('div');
+    cell.className='comp-cell';
+    cell.innerHTML=`<div class="label" style="color:${mColors[c]}">m=${m>=0?'+':''}${m}</div><canvas id="comp_${c}" width="96" height="96"></canvas>`;
+    g.appendChild(cell);
+  }
+}
+
+function drawProfiles(id,frame,x){
   const canvas=document.getElementById(id);
   const rect=canvas.parentElement.getBoundingClientRect();
   const dpr=window.devicePixelRatio;
-  canvas.style.width=(rect.width-24)+'px';canvas.style.height='200px';
-  canvas.width=(rect.width-24)*dpr;canvas.height=200*dpr;
+  const W=rect.width-16,H=220;
+  canvas.style.width=W+'px';canvas.style.height=H+'px';
+  canvas.width=W*dpr;canvas.height=H*dpr;
   const ctx=canvas.getContext('2d');ctx.scale(dpr,dpr);
-  const W=rect.width-24,H=200,p={l:55,r:15,t:15,b:30},pw=W-p.l-p.r,ph=H-p.t-p.b;
+  const p={l:50,r:12,t:12,b:28},pw=W-p.l-p.r,ph=H-p.t-p.b;
 
-  const allMax=Math.max(...frame.n_x,...frame.n_z)*1.1;
+  const allMax=Math.max(...frame.n_x)*1.1;
   const xMin=x[0],xMax=x[x.length-1];
 
   ctx.fillStyle='#12122a';ctx.fillRect(0,0,W,H);
-  ctx.strokeStyle='#1e1e3e';ctx.lineWidth=.5;
+  ctx.strokeStyle='#1a1a3a';ctx.lineWidth=.5;
   for(let i=0;i<=4;i++){const y=p.t+ph-(i/4)*ph;ctx.beginPath();ctx.moveTo(p.l,y);ctx.lineTo(p.l+pw,y);ctx.stroke();}
 
-  ctx.strokeStyle='#444';ctx.lineWidth=1;ctx.beginPath();
+  ctx.strokeStyle='#333';ctx.lineWidth=1;ctx.beginPath();
   ctx.moveTo(p.l,p.t);ctx.lineTo(p.l,p.t+ph);ctx.lineTo(p.l+pw,p.t+ph);ctx.stroke();
 
-  ctx.fillStyle='#889';ctx.font='10px sans-serif';ctx.textAlign='center';
-  for(let v=-8;v<=8;v+=4){const xp=p.l+((v-xMin)/(xMax-xMin))*pw;ctx.fillText(v,xp,p.t+ph+14);}
-
+  ctx.fillStyle='#778';ctx.font='9px sans-serif';ctx.textAlign='center';
+  for(let v=-8;v<=8;v+=4){ctx.fillText(v,p.l+((v-xMin)/(xMax-xMin))*pw,p.t+ph+12);}
   ctx.textAlign='right';ctx.textBaseline='middle';
-  for(let i=0;i<=4;i++){const v=(i/4)*allMax;ctx.fillText(v.toExponential(1),p.l-4,p.t+ph-(i/4)*ph);}
+  for(let i=0;i<=4;i++){ctx.fillText(((i/4)*allMax).toExponential(1),p.l-4,p.t+ph-(i/4)*ph);}
 
-  for(const[vals,coords,col] of [[frame.n_x,x,'#ff6b6b'],[frame.n_z,z,'#339af0']]){
-    ctx.strokeStyle=col;ctx.lineWidth=2;ctx.beginPath();
-    for(let i=0;i<coords.length;i++){
-      const xp=p.l+((coords[i]-xMin)/(xMax-xMin))*pw;
-      const yp=p.t+ph-(vals[i]/allMax)*ph;
-      i===0?ctx.moveTo(xp,yp):ctx.lineTo(xp,yp);
-    }ctx.stroke();
+  // Total (dashed)
+  ctx.strokeStyle='#ffffff88';ctx.lineWidth=1.5;ctx.setLineDash([4,3]);ctx.beginPath();
+  for(let i=0;i<x.length;i++){
+    const xp=p.l+((x[i]-xMin)/(xMax-xMin))*pw;
+    const yp=p.t+ph-(frame.n_x[i]/allMax)*ph;
+    i===0?ctx.moveTo(xp,yp):ctx.lineTo(xp,yp);
+  }ctx.stroke();ctx.setLineDash([]);
+
+  // Per component
+  if(frame.comp_n_x){
+    for(let c=0;c<D;c++){
+      const vals=frame.comp_n_x[c];
+      if(!vals)continue;
+      ctx.strokeStyle=mColors[c];ctx.lineWidth=1.2;ctx.beginPath();
+      for(let i=0;i<x.length;i++){
+        const xp=p.l+((x[i]-xMin)/(xMax-xMin))*pw;
+        const yp=p.t+ph-(vals[i]/allMax)*ph;
+        i===0?ctx.moveTo(xp,yp):ctx.lineTo(xp,yp);
+      }ctx.stroke();
+    }
   }
 }
 
 function updatePopBar(frame){
-  const bar=document.getElementById('pop-bar');
-  const leg=document.getElementById('pop-legend');
+  const bar=document.getElementById('pop-bar'),leg=document.getElementById('pop-legend');
   bar.innerHTML='';leg.innerHTML='';
-  const pops=frame.pops;
-  for(let c=0;c<13;c++){
-    const m=6-c;
+  for(let c=0;c<D;c++){
     const d=document.createElement('div');
-    d.style.width=(pops[c]*100)+'%';
-    d.style.background=mColors[c];
-    d.title=`m=${m>=0?'+':''}${m}: ${(pops[c]*100).toFixed(1)}%`;
+    d.style.width=(frame.pops[c]*100)+'%';d.style.background=mColors[c];
+    d.title=`m=${mLabels[c]>=0?'+':''}${mLabels[c]}: ${(frame.pops[c]*100).toFixed(1)}%`;
     bar.appendChild(d);
   }
-  for(let c=0;c<13;c++){
-    const m=6-c;
-    if(pops[c]>0.02){
+  for(let c=0;c<D;c++){
+    if(frame.pops[c]>0.01){
       const s=document.createElement('span');
-      s.innerHTML=`<span style="color:${mColors[c]}">■</span> m=${m>=0?'+':''}${m}: ${(pops[c]*100).toFixed(1)}%`;
+      s.innerHTML=`<span style="color:${mColors[c]}">■</span>m=${mLabels[c]>=0?'+':''}${mLabels[c]}:${(frame.pops[c]*100).toFixed(1)}%`;
       leg.appendChild(s);
     }
   }
@@ -162,45 +185,43 @@ function render(idx){
   document.getElementById('time-label').textContent=frame.t_ms.toFixed(1)+' ms';
   document.getElementById('slider').value=idx;
 
-  const statsEl=document.getElementById('stats');
-  const Mz=frame.Sz;
-  statsEl.innerHTML=[
+  document.getElementById('stats').innerHTML=[
     {v:frame.t_ms.toFixed(1)+' ms',l:'Time'},
-    {v:Mz.toFixed(2),l:'⟨F_z⟩'},
+    {v:frame.Sz.toFixed(2),l:'⟨F_z⟩'},
     {v:(frame.pops[0]*100).toFixed(1)+'%',l:'P(m=+6)'},
     {v:frame.norm.toFixed(4),l:'Norm'},
   ].map(s=>`<div class="stat"><div class="v">${s.v}</div><div class="l">${s.l}</div></div>`).join('');
 
   const N=64;
-  const globalMax=Math.max(...DATA.frames.map(f=>Math.max(...f.slice_xy,...f.slice_xz)));
-  const colMax=Math.max(...DATA.frames.map(f=>Math.max(...f.n_xy,...f.n_xz)));
+  const gMax=Math.max(...DATA.frames.map(f=>Math.max(...f.slice_xy,...f.slice_xz)));
+  drawHM(document.getElementById('c_xy'),frame.slice_xy,N,gMax);
+  drawHM(document.getElementById('c_xz'),frame.slice_xz,N,gMax);
 
-  drawHeatmap('c_xy',frame.slice_xy,N,globalMax);
-  drawHeatmap('c_xz',frame.slice_xz,N,globalMax);
-  drawHeatmap('c_col_xy',frame.n_xy,N,colMax);
-  drawHeatmap('c_col_xz',frame.n_xz,N,colMax);
-  drawProfiles('c_profiles',frame,DATA.x,DATA.z);
+  // Per-component column density
+  if(frame.comp_col_xy){
+    const compMax=Math.max(...DATA.frames.flatMap(f=>f.comp_col_xy?f.comp_col_xy.map(a=>Math.max(...a)):[0]));
+    for(let c=0;c<D;c++){
+      const cv=document.getElementById('comp_'+c);
+      if(cv&&frame.comp_col_xy[c])drawHM(cv,frame.comp_col_xy[c],N,compMax);
+    }
+  }
+
+  drawProfiles('c_profiles',frame,DATA.x);
   updatePopBar(frame);
 }
 
 async function main(){
-  const r=await fetch(DATA_URL);
-  DATA=await r.json();
+  const r=await fetch(DATA_URL);DATA=await r.json();
+  initCompGrid();
   const sl=document.getElementById('slider');
   sl.max=DATA.frames.length-1;
   sl.oninput=()=>{currentIdx=+sl.value;render(currentIdx);};
 
-  const btn=document.getElementById('btn-play');
-  btn.onclick=()=>{
-    playing=!playing;
-    btn.textContent=playing?'Pause':'Play';
-    btn.classList.toggle('active',playing);
-    if(playing){
-      playTimer=setInterval(()=>{
-        currentIdx=(currentIdx+1)%DATA.frames.length;
-        render(currentIdx);
-      },800);
-    }else clearInterval(playTimer);
+  document.getElementById('btn-play').onclick=function(){
+    playing=!playing;this.textContent=playing?'Pause':'Play';
+    this.classList.toggle('active',playing);
+    if(playing)playTimer=setInterval(()=>{currentIdx=(currentIdx+1)%DATA.frames.length;render(currentIdx);},1000);
+    else clearInterval(playTimer);
   };
 
   render(0);

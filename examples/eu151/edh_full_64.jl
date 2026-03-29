@@ -4,7 +4,6 @@ using Printf, Random, FFTW, JLD2
 function run_edh_64()
     println("=" ^ 70)
     println("  Eu151 Einstein-de Haas Effect — Full 40 ms (64³)")
-    println("  Matsui et al., Science 391, 384-388 (2026)")
     println("=" ^ 70)
 
     N_GRID = 64
@@ -24,7 +23,6 @@ function run_edh_64()
     @printf("c0=%.1f, c1=%.1f, c_dd=%.1f, p=%.4f\n",
         interactions.c0, interactions.c1, EU_c_dd, EU_p_weak)
 
-    # Ground state
     cache_file = joinpath(@__DIR__, "cache_eu151_gs_3d_$(N_GRID).jld2")
     psi_gs = if isfile(cache_file)
         println("Loading cached ground state")
@@ -45,12 +43,10 @@ function run_edh_64()
         gs.workspace.state.psi
     end
 
-    # Instantaneous quench + noise
     psi = copy(psi_gs)
     Random.seed!(42)
     SpinorBEC._add_noise!(psi, 0.001, D, 3, grid)
 
-    # dt=0.01 → 2760 steps for 27.6 ω⁻¹. Target: <30min
     dt = 0.01
     t_relax = 27.6
     n_relax = round(Int, t_relax / dt)
@@ -77,8 +73,14 @@ function run_edh_64()
         psi_now = ws.state.psi
         n_tot = SpinorBEC.total_density(psi_now, 3)
         cx = N_GRID ÷ 2 + 1
+
         pops = [sum(abs2, @view(psi_now[:,:,:,c])) * dV for c in 1:D]
         Sz = magnetization(psi_now, grid, sys)
+
+        # Per-component column densities (integrate along z → xy image)
+        comp_col_xy = [dropdims(sum(SpinorBEC.component_density(psi_now, 3, c), dims=3), dims=3) .* grid.dx[3] for c in 1:D]
+        # Per-component 1D profiles (x-axis through center)
+        comp_n_x = [SpinorBEC.component_density(psi_now, 3, c)[:, cx, cx] for c in 1:D]
 
         snapshots[label_ms] = (
             n_xy = dropdims(sum(n_tot, dims=3), dims=3) .* grid.dx[3],
@@ -90,17 +92,19 @@ function run_edh_64()
             pops = pops,
             Sz = Sz,
             norm = sum(abs2, psi_now) * dV,
+            comp_col_xy = comp_col_xy,
+            comp_n_x = comp_n_x,
         )
     end
 
-    @printf("%6s | %6s | %6s %6s %6s | %+7s | %8s\n",
-        "step", "t(ms)", "P(+6)", "P(+5)", "P(0)", "Sz", "norm")
-    println("-" ^ 65)
+    @printf("%6s | %6s | %6s %6s %6s | %+7s\n",
+        "step", "t(ms)", "P(+6)", "P(+5)", "P(0)", "Sz")
+    println("-" ^ 55)
 
     save_snapshot!(0.0)
     s = snapshots[0.0]
-    @printf("%6d | %6.1f | %.4f %.4f %.4f | %+7.3f | %.6f\n",
-        0, 0.0, s.pops[1], s.pops[2], s.pops[7], s.Sz, s.norm)
+    @printf("%6d | %6.1f | %.4f %.4f %.4f | %+7.3f\n",
+        0, 0.0, s.pops[1], s.pops[2], s.pops[7], s.Sz)
 
     for _ in 1:3; split_step!(ws); end
 
@@ -116,14 +120,14 @@ function run_edh_64()
             t_ms = snapshot_times_ms[next_snap_idx]
             save_snapshot!(t_ms)
             s = snapshots[t_ms]
-            @printf("%6d | %6.1f | %.4f %.4f %.4f | %+7.3f | %.6f\n",
-                actual_step, t_ms, s.pops[1], s.pops[2], s.pops[7], s.Sz, s.norm)
+            @printf("%6d | %6.1f | %.4f %.4f %.4f | %+7.3f\n",
+                actual_step, t_ms, s.pops[1], s.pops[2], s.pops[7], s.Sz)
             next_snap_idx += 1
         elseif actual_step % print_every == 0
             t_ms = actual_step * dt * EU_t_unit * 1e3
             p6 = sum(abs2, @view(ws.state.psi[:,:,:,1])) * dV
             Sz = magnetization(ws.state.psi, grid, sys)
-            @printf("%6d | %6.1f |  %.4f                | %+7.3f |\n",
+            @printf("%6d | %6.1f |  %.4f              | %+7.3f\n",
                 actual_step, t_ms, p6, Sz)
         end
     end
@@ -131,7 +135,6 @@ function run_edh_64()
 
     @printf("\n%d steps in %.0fs (%.2fs/step)\n", n_relax, wall, wall/n_relax)
 
-    # Save
     outfile = joinpath(@__DIR__, "edh_full_64.jld2")
     jldsave(outfile;
         snapshots=snapshots,
@@ -144,7 +147,8 @@ function run_edh_64()
     @printf("Saved → %s\n", outfile)
 
     println("\nFinal populations:")
-    sf = snapshots[snapshot_times_ms[end]]
+    last_t = maximum(keys(snapshots))
+    sf = snapshots[last_t]
     for c in 1:D
         m = 6 - (c - 1)
         bar = repeat("█", round(Int, sf.pops[c] * 50))
