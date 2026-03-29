@@ -29,22 +29,38 @@ function run_edh_physical()
     @printf("ε_dd=%.3f, DDI instability γ_max ≈ %.0f ω (e-fold %.0f μs)\n\n",
         EU_ε_dd, EU_c_dd * n_peak * 6, EU_t_unit * 1e6 / (EU_c_dd * n_peak * 6))
 
-    cache_file = joinpath(@__DIR__, "cache_eu151_gs_3d_$(N_GRID).jld2")
+    # Ground state WITH DDI (physical equilibrium)
+    cache_file = joinpath(@__DIR__, "cache_eu151_gs_ddi_$(N_GRID).jld2")
     psi_gs = if isfile(cache_file)
-        println("Loading cached ground state")
+        println("Loading cached ground state (with DDI)")
         load(cache_file, "psi")
     else
-        println("Computing ground state...")
+        println("Computing ground state with DDI (this takes a while)...")
+        # First: rough scalar ground state without DDI as starting point
+        gs0 = find_ground_state(;
+            grid, atom,
+            interactions=InteractionParams(EU_c_total, 0.0),
+            zeeman=ZeemanParams(100.0, 0.0),
+            potential=trap,
+            dt=0.005, n_steps=5000, tol=1e-8,
+            initial_state=:ferromagnetic,
+            enable_ddi=false,
+            fft_flags=FFTW.MEASURE,
+        )
+        println("  scalar GS energy: $(round(total_energy(gs0.workspace), sigdigits=6))")
+        # Then: refine with DDI enabled (ferromagnetic + strong Zeeman keeps m=+F)
         gs = find_ground_state(;
             grid, atom,
             interactions=InteractionParams(EU_c_total, 0.0),
             zeeman=ZeemanParams(100.0, 0.0),
             potential=trap,
-            dt=0.005, n_steps=20000, tol=1e-9,
-            initial_state=:ferromagnetic,
-            enable_ddi=false,
+            dt=0.002, n_steps=30000, tol=1e-9,
+            psi_init=gs0.workspace.state.psi,
+            enable_ddi=true, c_dd=EU_c_dd,
             fft_flags=FFTW.MEASURE,
         )
+        println("  DDI GS energy: $(round(total_energy(gs.workspace), sigdigits=6))")
+        println("  converged: $(gs.converged)")
         save(cache_file, "psi", gs.workspace.state.psi)
         gs.workspace.state.psi
     end
