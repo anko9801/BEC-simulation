@@ -47,4 +47,5 @@ using SpinorBEC
     include("test_phase_boundary.jl")
     include("test_tof.jl")
     include("test_bogoliubov.jl")
+    include("test_analytical_validation.jl")
 end
