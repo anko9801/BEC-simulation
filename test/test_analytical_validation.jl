@@ -256,4 +256,32 @@ using LinearAlgebra
             @test all(x -> isapprox(x, expected; rtol=1e-12), A)
         end
     end
+
+    @testset "ITP overflow detection" begin
+        @testset "contact interaction overflow throws" begin
+            huge = InteractionParams(1e6, 0.0)
+            @test_throws ArgumentError SpinorBEC._validate_itp_interactions(huge, 1, 0.01)
+        end
+
+        @testset "safe contact interaction passes" begin
+            safe = InteractionParams(100.0, 10.0)
+            @test SpinorBEC._validate_itp_interactions(safe, 1, 0.001) === nothing
+        end
+
+        @testset "DDI overflow throws" begin
+            small_contact = InteractionParams(1.0, 0.0)
+            @test_throws ArgumentError SpinorBEC._validate_itp_interactions(
+                small_contact, 6, 0.01; c_dd=1e5)
+        end
+
+        @testset "DDI safe passes" begin
+            ip = InteractionParams(100.0, 10.0)
+            @test SpinorBEC._validate_itp_interactions(ip, 1, 0.001; c_dd=10.0) === nothing
+        end
+
+        @testset "DDI check disabled when c_dd=0" begin
+            ip = InteractionParams(100.0, 0.0)
+            @test SpinorBEC._validate_itp_interactions(ip, 6, 0.01; c_dd=0.0) === nothing
+        end
+    end
 end
